@@ -1,0 +1,361 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta http-equiv="Content-Style-Type" content="text/css">
+  <title></title>
+  <meta name="Generator" content="Cocoa HTML Writer">
+  <meta name="CocoaVersion" content="2685.3">
+  <style type="text/css">
+    p.p1 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica}
+    p.p2 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica; min-height: 14.0px}
+  </style>
+</head>
+<body>
+<p class="p1">&lt;!DOCTYPE html&gt;</p>
+<p class="p1">&lt;html lang="zh-TW"&gt;</p>
+<p class="p1">&lt;head&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;meta charset="UTF-8"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;title&gt;新動力公關 - 活動管理系統&lt;/title&gt;</p>
+<p class="p2"><span class="Apple-converted-space">  </span></p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;script src="https://cdn.tailwindcss.com"&gt;&lt;/script&gt;</p>
+<p class="p2"><span class="Apple-converted-space">  </span></p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"&gt;&lt;/script&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"&gt;&lt;/script&gt;</p>
+<p class="p2"><span class="Apple-converted-space">  </span></p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;script src="https://unpkg.com/@babel/standalone/babel.min.js"&gt;&lt;/script&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;script src="https://unpkg.com/lucide@latest"&gt;&lt;/script&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;script src="https://unpkg.com/lucide-react/dist/umd/lucide-react.min.js"&gt;&lt;/script&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"&gt;&lt;/script&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"&gt;&lt;/script&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"&gt;&lt;/script&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;script src="https://unpkg.com/html5-qrcode" type="text/javascript"&gt;&lt;/script&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;style&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>/* 自定義動畫與樣式優化 */</p>
+<p class="p1"><span class="Apple-converted-space">    </span>@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>.animate-fade-in { animation: fade-in 0.5s ease-out; }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>body { background-color: #f1f5f9; }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>.hide-scrollbar::-webkit-scrollbar { display: none; }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;/style&gt;</p>
+<p class="p1">&lt;/head&gt;</p>
+<p class="p1">&lt;body&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;div id="root"&gt;&lt;/div&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;script type="text/babel"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const { useState, useEffect, useRef } = React;</p>
+<p class="p2"><span class="Apple-converted-space">    </span></p>
+<p class="p1"><span class="Apple-converted-space">    </span>// --- 圖示庫載入 ---</p>
+<p class="p1"><span class="Apple-converted-space">    </span>// 從 window.LucideReact 中解構我們需要的圖示</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const {<span class="Apple-converted-space"> </span></p>
+<p class="p1"><span class="Apple-converted-space">      </span>QrCode, Users, Settings, Calendar, FileText, CheckCircle, AlertCircle, Camera, LogOut,</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ChevronRight, Utensils, Gift, RefreshCw, ExternalLink, MessageSquare, Link: LinkIcon,</p>
+<p class="p1"><span class="Apple-converted-space">      </span>Mail, Smartphone, Bell, ShieldCheck, Briefcase, User, Star, Award, Lock, BarChart3,</p>
+<p class="p1"><span class="Apple-converted-space">      </span>CheckSquare, Users2, Check, Medal, DownloadCloud, Building2, Contact, XCircle, Info,</p>
+<p class="p1"><span class="Apple-converted-space">      </span>KeyRound, ScanLine, Newspaper<span class="Apple-converted-space"> </span></p>
+<p class="p1"><span class="Apple-converted-space">    </span>} = window.LucideReact;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>// --- Firebase 配置與初始化 (含 Demo 模式) ---</p>
+<p class="p1"><span class="Apple-converted-space">    </span>// 如果您有真正的 Firebase config，請填入下方物件中</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const firebaseConfig = {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>// apiKey: "您的_API_KEY",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>// authDomain: "您的_PROJECT.firebaseapp.com",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>// projectId: "您的_PROJECT_ID",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>// storageBucket: "...",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>// messagingSenderId: "...",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>// appId: "..."</p>
+<p class="p1"><span class="Apple-converted-space">    </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>let app, auth, db;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>let isDemoMode = false;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>try {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if (firebaseConfig.apiKey) {</p>
+<p class="p1"><span class="Apple-converted-space">        </span>app = firebase.initializeApp(firebaseConfig);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>auth = firebase.auth();</p>
+<p class="p1"><span class="Apple-converted-space">        </span>db = firebase.firestore();</p>
+<p class="p1"><span class="Apple-converted-space">      </span>} else {</p>
+<p class="p1"><span class="Apple-converted-space">        </span>throw new Error("No Config");</p>
+<p class="p1"><span class="Apple-converted-space">      </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>} catch (e) {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>console.warn("⚠️ 未偵測到 Firebase 設定，已切換至【演示模式 (Demo Mode)】");</p>
+<p class="p1"><span class="Apple-converted-space">      </span>isDemoMode = true;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>// --- 假資料 (用於演示模式) ---</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const MOCK_DB = {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>attendees: [</p>
+<p class="p1"><span class="Apple-converted-space">        </span>{ id: "A001", name: "王小明", Email: "wang@test.com", Company: "測試科技", Title: "經理", LEVEL: "Normal" },</p>
+<p class="p1"><span class="Apple-converted-space">        </span>{ id: "V001", name: "張董事長", Email: "chang@test.com", Company: "新動力公關", Title: "董事長", LEVEL: "VIP" }</p>
+<p class="p1"><span class="Apple-converted-space">      </span>],</p>
+<p class="p1"><span class="Apple-converted-space">      </span>news: [</p>
+<p class="p1"><span class="Apple-converted-space">        </span>{ id: "N1", title: "大會公告", date: "2026/02/16", content: "午餐便當已開始發放，請至 B 區領取。" }</p>
+<p class="p1"><span class="Apple-converted-space">      </span>],</p>
+<p class="p1"><span class="Apple-converted-space">      </span>claims: []</p>
+<p class="p1"><span class="Apple-converted-space">    </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>// --- 品牌 Logo 組件 ---</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const BrandLogo = ({ className = "w-full", invert = false }) =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const primaryColor = invert ? "#ffffff" : "#f37021";</p>
+<p class="p1"><span class="Apple-converted-space">      </span>return (</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;div className={`flex items-center justify-center ${className}`}&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;svg viewBox="0 0 600 160" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto text-current"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;circle cx="35" cy="35" r="22" fill="none" stroke={primaryColor} strokeWidth="8" /&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;line x1="35" y1="20" x2="35" y2="40" stroke={primaryColor} strokeWidth="8" strokeLinecap="round" /&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;g fill={primaryColor} style={{ fontFamily: 'Arial, sans-serif', fontWeight: '900', fontSize: '110px' }}&gt;</p>
+<p class="p1"><span class="Apple-converted-space">              </span>&lt;text x="15" y="145"&gt;i&lt;/text&gt;</p>
+<p class="p1"><span class="Apple-converted-space">              </span>&lt;text x="60" y="145"&gt;mpr&lt;/text&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;/g&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;line x1="280" y1="110" x2="590" y2="110" stroke={primaryColor} strokeWidth="4" /&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;text x="282" y="90" fill={primaryColor} style={{ fontFamily: 'sans-serif', fontWeight: '900', fontSize: '26px' }}&gt;</p>
+<p class="p1"><span class="Apple-converted-space">              </span>新動力公共關係顧問</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;/text&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;text x="282" y="140" fill={primaryColor} style={{ fontFamily: 'Arial, sans-serif', fontWeight: '700', fontSize: '14.5px' }}&gt;</p>
+<p class="p1"><span class="Apple-converted-space">              </span>Impetus Public Relations</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;/text&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;/svg&gt;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>// --- 主程式 ---</p>
+<p class="p1"><span class="Apple-converted-space">    </span>function App() {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const [view, setView] = useState('lookup');<span class="Apple-converted-space"> </span></p>
+<p class="p1"><span class="Apple-converted-space">      </span>const [currentUserData, setCurrentUserData] = useState(null);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const [claims, setClaims] = useState([]);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const [scanResult, setScanResult] = useState(null);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const [message, setMessage] = useState({ text: '', type: '' });</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>// 模擬資料載入</p>
+<p class="p1"><span class="Apple-converted-space">      </span>useEffect(() =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">        </span>if(isDemoMode) {</p>
+<p class="p1"><span class="Apple-converted-space">          </span>setClaims(MOCK_DB.claims);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p1"><span class="Apple-converted-space">      </span>}, []);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>// 處理登入查詢</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const handleLookup = (input) =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">        </span>if (!input) return;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>// 演示模式：只要輸入文字就當作成功，如果是 'vip' 就登入 VIP 帳號</p>
+<p class="p1"><span class="Apple-converted-space">        </span>let user;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>if (isDemoMode) {</p>
+<p class="p1"><span class="Apple-converted-space">          </span>if (input.toLowerCase().includes('vip')) {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>user = MOCK_DB.attendees[1];</p>
+<p class="p1"><span class="Apple-converted-space">          </span>} else if (input.includes('wang') || input.includes('test')) {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>user = MOCK_DB.attendees[0];</p>
+<p class="p1"><span class="Apple-converted-space">          </span>} else {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>// 隨機產生一個使用者</p>
+<p class="p1"><span class="Apple-converted-space">            </span>user = {</p>
+<p class="p1"><span class="Apple-converted-space">              </span>id: "GUEST-" + Math.floor(Math.random()*1000),</p>
+<p class="p1"><span class="Apple-converted-space">              </span>name: "貴賓 " + input,</p>
+<p class="p1"><span class="Apple-converted-space">              </span>Company: "參訪企業",</p>
+<p class="p1"><span class="Apple-converted-space">              </span>Title: "代表",</p>
+<p class="p1"><span class="Apple-converted-space">              </span>LEVEL: "Normal",</p>
+<p class="p1"><span class="Apple-converted-space">              </span>Email: input</p>
+<p class="p1"><span class="Apple-converted-space">            </span>};</p>
+<p class="p1"><span class="Apple-converted-space">          </span>}</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p1"><span class="Apple-converted-space">        </span>setCurrentUserData(user);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>setView('user-dashboard');</p>
+<p class="p1"><span class="Apple-converted-space">      </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>// 處理工作人員登入</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const handleStaffLogin = (acc, pw) =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">        </span>if (acc === 'admin' &amp;&amp; pw === 'admin') {</p>
+<p class="p1"><span class="Apple-converted-space">          </span>setCurrentUserData({ name: "管理員", LEVEL: "admin" });</p>
+<p class="p1"><span class="Apple-converted-space">          </span>setView('admin-panel');</p>
+<p class="p1"><span class="Apple-converted-space">        </span>} else {</p>
+<p class="p1"><span class="Apple-converted-space">          </span>setMessage({ text: "演示模式：請輸入 admin / admin", type: 'error' });</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p1"><span class="Apple-converted-space">      </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>// 渲染視圖路由</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const renderView = () =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">        </span>switch (view) {</p>
+<p class="p1"><span class="Apple-converted-space">          </span>case 'lookup': return &lt;Lookup onLogin={handleLookup} setView={setView} /&gt;;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>case 'staff-login': return &lt;StaffLogin onLogin={handleStaffLogin} setView={setView} /&gt;;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>case 'user-dashboard': return &lt;UserDashboard data={currentUserData} claims={claims} setView={setView} /&gt;;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>case 'admin-panel': return &lt;AdminPanel setView={setView} /&gt;;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>default: return &lt;Lookup onLogin={handleLookup} setView={setView} /&gt;;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p1"><span class="Apple-converted-space">      </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>return (</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;div className="min-h-screen bg-slate-100 text-slate-900 font-sans selection:bg-orange-100 flex justify-center"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;div className="w-full max-w-md bg-white min-h-screen shadow-2xl relative flex flex-col overflow-hidden animate-fade-in"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>{renderView()}</p>
+<p class="p1"><span class="Apple-converted-space">            </span>{message.text &amp;&amp; (</p>
+<p class="p1"><span class="Apple-converted-space">              </span>&lt;div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;div className="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full text-center"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                  </span>&lt;p className={`font-bold mb-4 ${message.type === 'error' ? 'text-red-600' : 'text-green-600'}`}&gt;{message.text}&lt;/p&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                  </span>&lt;button onClick={() =&gt; setMessage({text:'', type:''})} className="bg-slate-900 text-white px-6 py-2 rounded-full text-sm"&gt;確定&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">              </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>)}</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>// --- 子頁面組件 ---</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>function Lookup({ onLogin, setView }) {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const [val, setVal] = useState('');</p>
+<p class="p1"><span class="Apple-converted-space">      </span>return (</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;div className="p-10 flex flex-1 flex-col items-center justify-center text-center"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;BrandLogo className="mb-12 w-48" /&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;h1 className="text-xl font-black mb-2 text-slate-800"&gt;活動報到查詢&lt;/h1&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;p className="text-slate-400 text-sm mb-10"&gt;請輸入 Email 或手機號碼&lt;br/&gt;(演示模式：輸入任意文字即可)&lt;/p&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;div className="w-full space-y-4"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;input<span class="Apple-converted-space"> </span></p>
+<p class="p1"><span class="Apple-converted-space">              </span>type="text" placeholder="Email / 手機號碼"<span class="Apple-converted-space"> </span></p>
+<p class="p1"><span class="Apple-converted-space">              </span>className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-[#f37021] outline-none transition-all"</p>
+<p class="p1"><span class="Apple-converted-space">              </span>value={val} onChange={(e) =&gt; setVal(e.target.value)}</p>
+<p class="p1"><span class="Apple-converted-space">            </span>/&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;button onClick={() =&gt; onLogin(val)} className="w-full bg-[#f37021] text-white p-4 rounded-2xl font-black shadow-lg shadow-orange-100 hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-2"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">              </span>立即查詢 &lt;ChevronRight size={18} /&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;button onClick={() =&gt; setView('staff-login')} className="mt-12 text-slate-400 text-xs font-bold flex items-center gap-1 hover:text-slate-600"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;ShieldCheck size={14} /&gt; 工作人員登入</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>function StaffLogin({ onLogin, setView }) {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const [acc, setAcc] = useState('');</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const [pw, setPw] = useState('');</p>
+<p class="p1"><span class="Apple-converted-space">      </span>return (</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;div className="p-10 flex flex-1 flex-col items-center justify-center bg-slate-50 text-center"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;BrandLogo className="mb-10 w-40" /&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;h2 className="text-lg font-black mb-6 flex items-center gap-2"&gt;&lt;Lock size={20} className="text-orange-600"/&gt; 工作人員驗證&lt;/h2&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;div className="w-full space-y-4"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;input type="text" placeholder="帳號 (admin)" value={acc} onChange={e=&gt;setAcc(e.target.value)} className="w-full p-4 bg-white rounded-2xl border border-slate-200 outline-none"/&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;input type="password" placeholder="密碼 (admin)" value={pw} onChange={e=&gt;setPw(e.target.value)} className="w-full p-4 bg-white rounded-2xl border border-slate-200 outline-none"/&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;button onClick={() =&gt; onLogin(acc, pw)} className="w-full bg-slate-900 text-white p-4 rounded-2xl font-black shadow-lg"&gt;登入&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;button onClick={() =&gt; setView('lookup')} className="text-slate-400 text-sm underline mt-4"&gt;返回前頁&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>function UserDashboard({ data, claims, setView }) {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const [tab, setTab] = useState('profile');</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const isVIP = (data.LEVEL || '').toUpperCase() === 'VIP';</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&amp;data=${encodeURIComponent(data.id)}`;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>return (</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;div className="flex flex-col h-full bg-slate-50"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>{/* Header */}</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;div className={`${isVIP ? 'bg-gradient-to-br from-amber-500 to-[#f37021]' : 'bg-gradient-to-br from-blue-600 to-blue-800'} p-6 text-white pb-14 shadow-lg relative`}&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;div className="flex justify-between items-center mb-6"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">              </span>&lt;BrandLogo invert className="h-5 w-32" /&gt;</p>
+<p class="p1"><span class="Apple-converted-space">              </span>&lt;button onClick={() =&gt; setView('lookup')} className="p-2 bg-white/20 rounded-xl"&gt;&lt;LogOut size={18}/&gt;&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;div className="flex items-center gap-5"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">              </span>&lt;div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center shadow-xl text-slate-800"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>{isVIP ? &lt;Medal size={40} className="text-amber-500" /&gt; : &lt;User size={40} className="text-blue-500" /&gt;}</p>
+<p class="p1"><span class="Apple-converted-space">              </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">              </span>&lt;div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;h2 className="text-2xl font-black"&gt;{data.name}&lt;/h2&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;p className="text-xs opacity-90"&gt;{data.Company} / {data.Title}&lt;/p&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;span className={`inline-block mt-2 text-[10px] px-2 py-0.5 rounded-md font-bold uppercase ${isVIP ? 'bg-amber-300 text-amber-900' : 'bg-blue-400/30 text-white'}`}&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                  </span>{isVIP ? 'VIP 貴賓' : '與會嘉賓'}</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;/span&gt;</p>
+<p class="p1"><span class="Apple-converted-space">              </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;/div&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">          </span>{/* Tabs */}</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;div className="flex bg-white mx-5 -mt-6 rounded-3xl shadow-xl relative z-10 p-1 mb-4"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;button onClick={() =&gt; setTab('profile')} className={`flex-1 py-3 text-xs font-black rounded-2xl transition-all ${tab==='profile'?'bg-orange-50 text-orange-600':'text-slate-400'}`}&gt;我的票券&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;button onClick={() =&gt; setTab('news')} className={`flex-1 py-3 text-xs font-black rounded-2xl transition-all ${tab==='news'?'bg-orange-50 text-orange-600':'text-slate-400'}`}&gt;大會公告&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;/div&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">          </span>{/* Content */}</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;div className="flex-1 overflow-y-auto p-6 space-y-6"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>{tab === 'profile' &amp;&amp; (</p>
+<p class="p1"><span class="Apple-converted-space">              </span>&lt;&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm flex flex-col items-center"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                  </span>&lt;img src={qrUrl} alt="QR" className="w-48 h-48 mix-blend-multiply" /&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                  </span>&lt;p className="text-[10px] font-black text-slate-300 tracking-widest mt-4 uppercase"&gt;Scan for Check-in&lt;/p&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;div className="grid grid-cols-2 gap-4"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                  </span>&lt;div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm text-center"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;Utensils className="mx-auto mb-2 text-blue-500" size={20}/&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;p className="text-xs font-bold text-slate-600"&gt;餐點核銷&lt;/p&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;p className="text-[10px] text-slate-400 mt-1"&gt;未領取&lt;/p&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                  </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                  </span>&lt;div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm text-center"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;Gift className="mx-auto mb-2 text-orange-500" size={20}/&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;p className="text-xs font-bold text-slate-600"&gt;紀念品&lt;/p&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;p className="text-[10px] text-slate-400 mt-1"&gt;未領取&lt;/p&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                  </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">              </span>&lt;/&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>)}</p>
+<p class="p1"><span class="Apple-converted-space">            </span>{tab === 'news' &amp;&amp; (</p>
+<p class="p1"><span class="Apple-converted-space">              </span>&lt;div className="space-y-4"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>{MOCK_DB.news.map(n =&gt; (</p>
+<p class="p1"><span class="Apple-converted-space">                  </span>&lt;div key={n.id} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;div className="flex justify-between mb-2"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                      </span>&lt;h3 className="font-bold text-slate-800"&gt;{n.title}&lt;/h3&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                      </span>&lt;span className="text-[10px] bg-slate-100 px-2 py-1 rounded-full text-slate-500"&gt;{n.date}&lt;/span&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;p className="text-xs text-slate-500 leading-relaxed"&gt;{n.content}&lt;/p&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                  </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>))}</p>
+<p class="p1"><span class="Apple-converted-space">              </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>)}</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>function AdminPanel({ setView }) {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>// 簡易的相機掃描實作</p>
+<p class="p1"><span class="Apple-converted-space">      </span>useEffect(() =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">        </span>// 在這裡可以初始化 html5-qrcode</p>
+<p class="p1"><span class="Apple-converted-space">      </span>}, []);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>return (</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;div className="flex flex-col h-full bg-slate-900 text-white"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;div className="p-6 border-b border-white/10 flex justify-between items-center"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;h2 className="font-black flex items-center gap-2"&gt;&lt;Camera className="text-orange-500"/&gt; 管理掃描模式&lt;/h2&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;button onClick={()=&gt;setView('lookup')} className="text-xs bg-white/10 px-3 py-1.5 rounded-lg"&gt;退出&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;div className="flex-1 flex flex-col items-center justify-center p-8 text-center"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;div className="w-64 h-64 bg-black/50 rounded-3xl border-2 border-orange-500/50 flex items-center justify-center mb-6 overflow-hidden relative"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">               </span>&lt;div id="reader" className="w-full h-full"&gt;&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">               </span>&lt;p className="absolute text-orange-500 font-bold animate-pulse text-xs tracking-widest"&gt;CAMERA ACTIVE&lt;/p&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;p className="text-sm text-slate-400 mb-8"&gt;請對準與會者的 QR Code 進行掃描&lt;/p&gt;</p>
+<p class="p2"><span class="Apple-converted-space">            </span></p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;div className="grid grid-cols-2 gap-4 w-full"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">               </span>&lt;div className="bg-white/5 p-4 rounded-2xl"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                 </span>&lt;p className="text-2xl font-black text-white"&gt;0&lt;/p&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                 </span>&lt;p className="text-[10px] text-slate-500 uppercase"&gt;已領餐&lt;/p&gt;</p>
+<p class="p1"><span class="Apple-converted-space">               </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">               </span>&lt;div className="bg-white/5 p-4 rounded-2xl"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                 </span>&lt;p className="text-2xl font-black text-white"&gt;0&lt;/p&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                 </span>&lt;p className="text-[10px] text-slate-500 uppercase"&gt;已報到&lt;/p&gt;</p>
+<p class="p1"><span class="Apple-converted-space">               </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>const root = ReactDOM.createRoot(document.getElementById('root'));</p>
+<p class="p1"><span class="Apple-converted-space">    </span>root.render(&lt;App /&gt;);</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;/script&gt;</p>
+<p class="p1">&lt;/body&gt;</p>
+<p class="p1">&lt;/html&gt;</p>
+</body>
+</html>
