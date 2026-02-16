@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>新動力公關 - 管理與報到系統</title>
+  <title>IMPR - 管理與報到系統</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -43,8 +43,14 @@
       const [isSyncing, setIsSyncing] = useState(false);
       const [scanMode, setScanMode] = useState('checkin');
 
-      // 你的 API 網址
-      const API = "https://script.google.com/macros/s/AKfycbxU8QsPsv2RohYWzED_nqip9owyQP14zrJsE439bNOPtYseeouIIePNdyqYeFXuGKcS/exec";
+      // 你的 API 網址 (無需更改)
+      const API = "https://script.google.com/macros/s/AKfycbwgt11j12Bf3MvXAIc2SPirI-vSdZbtK82JWvZaFQRZSUaQcFqZMXcTl095cYimsBi5/exec";
+
+      const formatDate = (val) => {
+        if (!val) return '';
+        const str = String(val);
+        return str.includes('T') ? str.split('T')[0] : str;
+      };
 
       const loadData = () => {
         setIsSyncing(true);
@@ -110,27 +116,68 @@
         }
       }, [view, db.LIST, scanMode]);
 
-      // 共用元件：最新消息與議程
+      // 🌟 共用元件：支援國際雙語的最新消息與議程
       const InfoSection = ({ isDark = false }) => (
         <div className="mt-6 space-y-4">
+          {/* 最新消息 News */}
           <div className={`${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-100 text-slate-800'} p-5 rounded-3xl shadow-lg border`}>
-            <h3 className="text-lg font-bold mb-3 flex items-center gap-2"><Icon name="Bell" className="text-orange-500" size={20}/> 最新消息</h3>
+            <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
+              <Icon name="Bell" className="text-orange-500" size={20}/> 
+              最新消息 <span className="text-xs text-slate-400 font-normal ml-1">Latest News</span>
+            </h3>
             {db.NEWS?.length > 0 ? db.NEWS.map((n, i) => (
               <div key={i} className={`mb-3 pb-3 border-b last:border-0 last:mb-0 last:pb-0 ${isDark ? 'border-slate-700' : 'border-slate-100'}`}>
-                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'} font-bold mb-1`}>{n['時間'] || n.Time}</p>
-                <p className={`text-sm ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>{n['內容'] || n.Content || n.Title}</p>
+                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'} font-bold mb-1`}>
+                  {(n.Date || n['日期']) && `${formatDate(n.Date || n['日期'])} `}
+                  {n.Time || n.Times || n['時間']}
+                </p>
+                <p className={`text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                  {n.News || n.Content || n['內容']}
+                </p>
               </div>
-            )) : <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>目前無最新消息</p>}
+            )) : <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>目前無最新消息 / No news available.</p>}
           </div>
 
+          {/* 大會議程 Agenda */}
           <div className={`${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-100 text-slate-800'} p-5 rounded-3xl shadow-lg border`}>
-            <h3 className="text-lg font-bold mb-3 flex items-center gap-2"><Icon name="CalendarDays" className="text-blue-500" size={20}/> 大會議程</h3>
+            <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
+              <Icon name="CalendarDays" className="text-blue-500" size={20}/> 
+              大會議程 <span className="text-xs text-slate-400 font-normal ml-1">Agenda</span>
+            </h3>
             {db.AGENDA?.length > 0 ? db.AGENDA.map((a, i) => (
-              <div key={i} className={`flex gap-3 mb-3 pb-3 border-b last:border-0 last:mb-0 last:pb-0 ${isDark ? 'border-slate-700' : 'border-slate-100'}`}>
-                <div className="text-sm font-bold text-blue-500 whitespace-nowrap">{a['時間'] || a.Time}</div>
-                <div className={`text-sm ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>{a['議程'] || a.Title || a.Content}</div>
+              <div key={i} className={`flex gap-3 mb-4 pb-4 border-b last:border-0 last:mb-0 last:pb-0 ${isDark ? 'border-slate-700' : 'border-slate-100'}`}>
+                
+                {/* 時間區塊 */}
+                <div className="text-sm font-bold text-blue-500 whitespace-nowrap min-w-[4rem]">
+                  {a.DATE && <div className="text-[10px] text-slate-400 mb-0.5">{formatDate(a.DATE)}</div>}
+                  <div>{a.TIME || a['時間']}</div>
+                </div>
+                
+                {/* 議程內容區塊 */}
+                <div className={`text-sm ${isDark ? 'text-slate-200' : 'text-slate-700'} flex-1`}>
+                  <div className="font-bold text-base mb-1.5">{a.Item || a['議程']}</div>
+                  
+                  {a.Speaker && (
+                    <div className="text-xs flex items-center gap-1.5 mb-1 text-slate-500">
+                      <Icon name="User" size={14} className="text-orange-400"/> 
+                      <span className="font-bold">Speaker:</span> {a.Speaker}
+                    </div>
+                  )}
+                  {a.Moderator && (
+                    <div className="text-xs flex items-center gap-1.5 mb-1 text-slate-500">
+                      <Icon name="Mic" size={14} className="text-emerald-500"/> 
+                      <span className="font-bold">Moderator:</span> {a.Moderator}
+                    </div>
+                  )}
+                  {a.Location && (
+                    <div className="text-xs flex items-center gap-1.5 mt-2 text-slate-400">
+                      <Icon name="MapPin" size={14} className="text-blue-400"/> 
+                      Location: {a.Location}
+                    </div>
+                  )}
+                </div>
               </div>
-            )) : <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>目前無議程資訊</p>}
+            )) : <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>目前無議程資訊 / No agenda available.</p>}
           </div>
         </div>
       );
@@ -145,13 +192,13 @@
                 <div className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-xs font-bold tracking-widest flex items-center gap-1"><Icon name="Lock" size={12}/> STAFF</div>
               </div>
               <h2 className="text-2xl font-bold text-white mb-6 text-center">後台管理登入</h2>
-              <input type="text" placeholder="帳號" className="w-full p-4 mb-4 bg-slate-900 text-white border border-slate-700 rounded-xl outline-none" value={staffAccount} onChange={e => setStaffAccount(e.target.value)} />
-              <input type="password" placeholder="密碼" className="w-full p-4 mb-6 bg-slate-900 text-white border border-slate-700 rounded-xl outline-none" value={staffPassword} onChange={e => setStaffPassword(e.target.value)} />
+              <input type="text" placeholder="帳號 Account" className="w-full p-4 mb-4 bg-slate-900 text-white border border-slate-700 rounded-xl outline-none" value={staffAccount} onChange={e => setStaffAccount(e.target.value)} />
+              <input type="password" placeholder="密碼 Password" className="w-full p-4 mb-6 bg-slate-900 text-white border border-slate-700 rounded-xl outline-none" value={staffPassword} onChange={e => setStaffPassword(e.target.value)} />
               <button onClick={() => {
                 const foundStaff = db.WORKER.find(w => String(w['帳號']) === staffAccount && String(w['密碼']) === staffPassword);
                 if(foundStaff) { setLoggedStaff(foundStaff); setView('scanner'); setStaffAccount(''); setStaffPassword(''); } 
-                else { alert("帳號或密碼錯誤！"); }
-              }} className="w-full bg-orange-600 text-white p-4 rounded-xl font-bold hover:bg-orange-500">登入系統</button>
+                else { alert("帳號或密碼錯誤！\nInvalid account or password."); }
+              }} className="w-full bg-orange-600 text-white p-4 rounded-xl font-bold hover:bg-orange-500">登入系統 Login</button>
             </div>
           </div>
         );
@@ -178,9 +225,9 @@
 
             {!scanResult && (
               <div className="flex bg-slate-800 p-1 rounded-xl mb-4 shadow-inner">
-                <button onClick={() => setScanMode('checkin')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'checkin' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>報到</button>
-                <button onClick={() => setScanMode('meal')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'meal' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400'}`}>領餐</button>
-                <button onClick={() => setScanMode('souvenir')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'souvenir' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400'}`}>紀念品</button>
+                <button onClick={() => setScanMode('checkin')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'checkin' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>入場報到</button>
+                <button onClick={() => setScanMode('meal')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'meal' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400'}`}>發放餐點</button>
+                <button onClick={() => setScanMode('souvenir')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'souvenir' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400'}`}>發放紀念品</button>
               </div>
             )}
             
@@ -225,8 +272,8 @@
           <div className="min-h-screen bg-slate-50 flex flex-col animate-fade-in pb-10">
             <div className={`p-6 pt-8 ${themeBg} text-white rounded-b-[40px] shadow-lg relative z-10`}>
               <div className="flex justify-between items-center mb-4">
-                <button onClick={() => {setUser(null); setView('lookup'); setInput('');}} className="flex items-center gap-1 font-medium hover:text-slate-200 transition"><Icon name="ArrowLeft" size={20} /> 回首頁</button>
-                <button onClick={loadData} className="flex items-center gap-1 font-medium hover:text-slate-200 transition"><Icon name="RefreshCw" size={18} className={isSyncing ? "animate-spin" : ""} /> 更新資料</button>
+                <button onClick={() => {setUser(null); setView('lookup'); setInput('');}} className="flex items-center gap-1 font-medium hover:text-slate-200 transition"><Icon name="ArrowLeft" size={20} /> 回首頁 Back</button>
+                <button onClick={loadData} className="flex items-center gap-1 font-medium hover:text-slate-200 transition"><Icon name="RefreshCw" size={18} className={isSyncing ? "animate-spin" : ""} /> 更新 Refresh</button>
               </div>
               <div className="flex items-center gap-2 mb-1">
                 <h2 className="text-3xl font-black">{user.Name}</h2>
@@ -240,18 +287,18 @@
                 <div className="p-3 bg-slate-50 rounded-2xl mb-2 border border-slate-100">
                   <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${user.ID}`} className="w-40 h-40" alt="QR Code" />
                 </div>
-                <p className="font-bold text-slate-400 tracking-widest text-[10px]">專屬報到憑證</p>
+                <p className="font-bold text-slate-400 tracking-widest text-[10px]">專屬報到憑證 ENTRY QR CODE</p>
               </div>
 
               <div className="w-full bg-white p-6 shadow-xl rounded-[30px] border border-slate-100">
-                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Icon name="FileText" className="text-slate-400" size={20} /> 基本資訊</h3>
+                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Icon name="FileText" className="text-slate-400" size={20} /> 基本資訊 Info</h3>
                 <div className="space-y-3 text-sm mb-6">
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-2"><span className="text-slate-500">所屬公司</span><span className="font-bold text-slate-800 text-right">{user.Company || user['公司'] || '-'}</span></div>
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-2"><span className="text-slate-500">聯絡信箱</span><span className="font-bold text-slate-800 text-right">{user.Email || '-'}</span></div>
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-2"><span className="text-slate-500">餐點需求</span><span className={`font-bold border px-2 py-0.5 rounded-md ${badgeBg}`}>{user.Eating || user['餐點'] || '無特別備註'}</span></div>
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-2"><span className="text-slate-500">公司 Company</span><span className="font-bold text-slate-800 text-right">{user.Company || user['公司'] || '-'}</span></div>
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-2"><span className="text-slate-500">信箱 Email</span><span className="font-bold text-slate-800 text-right">{user.Email || '-'}</span></div>
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-2"><span className="text-slate-500">餐點 Dietary</span><span className={`font-bold border px-2 py-0.5 rounded-md ${badgeBg}`}>{user.Eating || user['餐點'] || '無特別備註 None'}</span></div>
                 </div>
 
-                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Icon name="CheckCircle" className="text-slate-400" size={20} /> 領取狀態</h3>
+                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Icon name="CheckCircle" className="text-slate-400" size={20} /> 領取狀態 Status</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center ${user['領餐時間'] ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
                     <Icon name="Utensils" size={24} className={`mb-1 ${user['領餐時間'] ? 'text-emerald-500' : 'text-slate-300'}`} />
@@ -279,14 +326,14 @@
                <img src="https://imprjoseph.github.io/PWA-system/logo.png" alt="新動力公關" className="h-16 w-auto object-contain" onError={(e) => { e.target.style.display='none'; document.getElementById('logo-fallback').style.display='block'; }}/>
                <div id="logo-fallback" className="hidden text-2xl font-black text-orange-600">IMPR 新動力公關</div>
             </div>
-            <h1 className="text-xl font-bold text-center mb-8 text-slate-600">活動報到系統</h1>
-            <input type="text" placeholder="請輸入 Email 或 手機號碼" className="w-full p-4 mb-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-[#f37021]" value={input} onChange={e => setInput(e.target.value)} />
+            <h1 className="text-xl font-bold text-center mb-8 text-slate-600">活動報到系統<br/><span className="text-sm font-normal text-slate-400">Event Check-in System</span></h1>
+            <input type="text" placeholder="請輸入 Email / 手機號碼 / ID" className="w-full p-4 mb-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-[#f37021]" value={input} onChange={e => setInput(e.target.value)} />
             <button onClick={() => {
-              const found = db.LIST.find(a => String(a.Email) === input || String(a.Phone) === input);
-              if(found) { setUser(found); setView('dashboard'); } else { alert("查無資料，請確認輸入是否有誤。"); }
-            }} className="w-full bg-[#f37021] text-white p-4 rounded-2xl font-bold mb-4 shadow-lg shadow-orange-200 hover:bg-[#e06117]">登入查詢</button>
+              const found = db.LIST.find(a => String(a.Email) === input || String(a.Phone) === input || String(a.ID) === input);
+              if(found) { setUser(found); setView('dashboard'); } else { alert("查無資料，請確認輸入是否有誤。\nData not found."); }
+            }} className="w-full bg-[#f37021] text-white p-4 rounded-2xl font-bold mb-4 shadow-lg shadow-orange-200 hover:bg-[#e06117]">登入查詢 Login</button>
             <button onClick={() => setView('staffLogin')} className="w-full border-2 border-slate-100 text-slate-400 p-4 rounded-2xl font-bold flex items-center justify-center gap-2 mt-4 hover:bg-slate-50">
-              <Icon name="Lock" size={16} /> 工作人員入口
+              <Icon name="Lock" size={16} /> 工作人員入口 Staff Only
             </button>
           </div>
         </div>
