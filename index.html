@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>新動力公關 - 管理與報到系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide-react/dist/umd/lucide-react.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fade-in 0.5s ease-out; }
+    body { background-color: #0f172a; margin: 0; font-family: sans-serif; }
+    #reader { width: 100% !important; border: none !important; }
+    #reader__scan_region { background: white; }
+  </style>
+</head>
+<body>
+  <div id="root">系統初始化中...</div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const Icon = ({ name, ...props }) => {
+      const LucideIcon = window.LucideReact ? window.LucideReact[name] : null;
+      return LucideIcon ? <LucideIcon {...props} /> : null;
+    };
+
+    function App() {
+      const [db, setDb] = useState({ LIST: [], NEWS: [] });
+      const [view, setView] = useState('lookup'); // lookup, dashboard, scanner
+      const [user, setUser] = useState(null);
+      const [input, setInput] = useState('');
+      const [scanResult, setScanResult] = useState(null);
+      const [isSyncing, setIsSyncing] = useState(false);
+      const [scanMode, setScanMode] = useState('checkin'); // checkin (報到), checkout (離場領物)
+
+      // 🌟 已經為你更新為最新的 Google Apps Script API 網址 🌟
+      const API = "https://script.google.com/macros/s/AKfycbwRRewKckgYGGdJf-Z2SOt1tkf98nw_4vZ8o6jMjUZNwZ4DQvhVJBUtfYmnOJArdyI8/exec";
+
+      // 網頁載入時同步 Google Sheet 資料
+      useEffect(() => {
+        fetch(API).then(res => res.json()).then(data => setDb(data));
+      }, []);
+
+      // 掃描器邏輯 
+      useEffect(() => {
+        if (view === 'scanner') {
+          const html5QrCode = new Html5Qrcode("reader");
+          html5QrCode.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            (decodedText) => {
+              const found = db.LIST.find(a => String(a.ID) === decodedText);
+              html5QrCode.stop(); // 掃到後立刻停止相機
+              
+              if (found) {
+                setScanResult({ ...found, status: 'found' });
+                setIsSyncing(true);
+                
+                // 發送 POST 請求寫入時間，附帶目前模式(報到或領物)
+                fetch(API, {
+                  method: 'POST',
+                  body: JSON.stringify({ id: decodedText, action: scanMode }) 
+                })
+                .then(res => res.json())
+                .then(result => {
+                  setIsSyncing(false);
+                  if(result.status === "success") {
+                    setScanResult({ ...found, status: 'success' });
+                  } else if (result.status === "warning") {
+                    setScanResult({ ...found, status: 'warning', errorMsg: result.message });
+                  } else {
+                    setScanResult({ ...found, status: 'error', errorMsg: '寫入失敗' });
+                  }
+                })
+                .catch(err => {
+                  setIsSyncing(false);
+                  setScanResult({ ...found, status: 'error', errorMsg: '網路連線異常' });
+                });
+
+              } else {
+                setScanResult({ Name: "未知代碼", ID: decodedText, status: 'not_found' });
+              }
+            },
+            () => {}
+          );
+          return () => { if(html5QrCode.isScanning) html5QrCode.stop(); };
+        }
+      }, [view, db.LIST, scanMode]);
+
+      // --- 畫面一：工作人員掃描介面 ---
+      if (view === 'scanner') {
+        return (
+          <div className="min-h-screen bg-slate-900 text-white p-6 animate-fade-in flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+              <h1 className="text-xl font-bold flex items-center gap-2">
+                <Icon name="Camera" /> 
+                {scanMode === 'checkin' ? '掃描報到' : '掃描離場領物'}
+              </h1>
+              <button onClick={() => {setView('lookup'); setScanResult(null);}} className="text-slate-400">關閉</button>
+            </div>
+
+            {/* 模式切換按鈕 */}
+            {!scanResult && (
+              <div className="flex bg-slate-800 p-1 rounded-xl mb-6 shadow-inner">
+                <button 
+                  onClick={() => setScanMode('checkin')}
+                  className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${scanMode === 'checkin' ? 'bg-orange-500 text-white shadow-md' : 'text-slate-400'}`}>
+                  入場報到
+                </button>
+                <button 
+                  onClick={() => setScanMode('checkout')}
+                  className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${scanMode === 'checkout' ? 'bg-blue-500 text-white shadow-md' : 'text-slate-400'}`}>
+                  離場領物
+                </button>
+              </div>
+            )}
+            
+            {!scanResult ? (
+              <div className={`overflow-hidden rounded-3xl border-2 shadow-[0_0_20px_rgba(0,0,0,0.3)] ${scanMode === 'checkin' ? 'border-orange-500' : 'border-blue-500'}`}>
+                <div id="reader"></div>
+              </div>
+            ) : (
+              <div className="bg-white text-slate-900 p-8 rounded-[40px] text-center animate-fade-in mt-auto mb-auto">
+                <div className={`w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center 
+                  ${scanResult.status === 'success' ? 'bg-green-100 text-green-600' : 
+                    scanResult.status === 'warning' ? 'bg-yellow-100 text-yellow-600' :
+                    scanResult.status === 'not_found' || scanResult.status === 'error' ? 'bg-red-100 text-red-600' : 
+                    'bg-slate-100 text-slate-500'}`}>
+                  
+                  {isSyncing ? <Icon name="Loader2" className="animate-spin" size={40} /> : 
+                   scanResult.status === 'success' ? <Icon name="CheckCircle" size={40} /> : 
+                   scanResult.status === 'warning' ? <Icon name="AlertTriangle" size={40} /> : 
+                   <Icon name="XCircle" size={40} />}
+                </div>
+                
+                <h2 className="text-2xl font-bold mb-2">{scanResult.Name}</h2>
+                <p className="text-slate-500 mb-2">{scanResult.Company || "無資料"}</p>
+                
+                <div className="mb-6 h-6">
+                  {isSyncing && <span className="text-slate-500 font-bold text-sm">資料同步中...</span>}
+                  {scanResult.status === 'success' && <span className="text-green-600 font-bold text-sm">{scanMode === 'checkin' ? '報到完成！' : '領取完成！'}已寫入時間</span>}
+                  {scanResult.status === 'warning' && <span className="text-yellow-600 font-bold text-sm">{scanResult.errorMsg}</span>}
+                  {scanResult.status === 'error' && <span className="text-red-500 font-bold text-sm">{scanResult.errorMsg}</span>}
+                  {scanResult.status === 'not_found' && <span className="text-red-500 font-bold text-sm">非本活動與會人員</span>}
+                </div>
+
+                <button 
+                  onClick={() => setScanResult(null)} 
+                  disabled={isSyncing}
+                  className={`w-full p-4 rounded-2xl font-bold transition-all ${isSyncing ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 text-white shadow-lg'}`}>
+                  繼續掃描
+                </button>
+              </div>
+            )}
+            
+            {!scanResult && (
+              <p className="text-center mt-8 text-slate-500 text-sm">
+                目前為 <strong className={scanMode === 'checkin' ? 'text-orange-400' : 'text-blue-400'}>
+                  {scanMode === 'checkin' ? '入場報到' : '離場領物'}
+                </strong> 模式<br/>請將與會者 QR Code 置於方框內
+              </p>
+            )}
+          </div>
+        );
+      }
+
+      // --- 畫面二：與會者個人頁面 (Dashboard) ---
+      if (view === 'dashboard') {
+        return (
+          <div className="min-h-screen bg-slate-50 flex flex-col animate-fade-in pb-10">
+            {/* 上方個人資訊區塊 */}
+            <div className="p-8 bg-orange-600 text-white rounded-b-[50px] shadow-lg relative z-10">
+              <div className="flex justify-between mb-8">
+                <button onClick={() => {setUser(null); setView('lookup'); setInput('');}} className="p-2 -ml-2 hover:bg-white/20 rounded-full transition">
+                  <Icon name="ArrowLeft" />
+                </button>
+                <button className="p-2 -mr-2 hover:bg-white/20 rounded-full transition">
+                  <Icon name="Bell" />
+                </button>
+              </div>
+              <h2 className="text-3xl font-bold mb-2">您好, {user?.Name}</h2>
+              <p className="opacity-80 flex items-center gap-2">
+                <Icon name="MapPin" size={16} /> 歡迎參加本活動
+              </p>
+            </div>
+
+            <div className="px-6 -mt-6 relative z-20 flex flex-col items-center">
+              {/* QR Code 專屬憑證 */}
+              <div className="w-full bg-white p-8 shadow-2xl rounded-[40px] border border-slate-50 flex flex-col items-center mb-8">
+                <div className="p-4 bg-slate-50 rounded-3xl mb-4">
+                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${user?.ID}`} className="w-48 h-48" alt="QR Code" />
+                </div>
+                <p className="font-bold text-slate-400 tracking-widest text-xs">YOUR ENTRY QR CODE</p>
+              </div>
+
+              {/* 最新消息與活動議程區塊 */}
+              <div className="w-full bg-white p-8 shadow-xl rounded-[40px] border border-slate-50">
+                <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                  <Icon name="CalendarDays" className="text-orange-500" /> 
+                  大會議程 / 最新消息
+                </h3>
+                
+                <div className="space-y-5">
+                  {db.NEWS && db.NEWS.length > 0 ? (
+                    db.NEWS.map((item, index) => (
+                      <div key={index} className="relative pl-6 border-l-4 border-orange-200">
+                        <div className="absolute -left-[11px] top-1 w-5 h-5 bg-white border-4 border-orange-500 rounded-full"></div>
+                        <p className="text-orange-600 font-bold text-sm mb-1">
+                          {item.Time || item['時間'] || "最新公告"}
+                        </p>
+                        <p className="text-slate-700 font-medium leading-relaxed">
+                          {item.Content || item['內容'] || item.Title || item['標題']}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-6 text-slate-400 flex flex-col items-center gap-2">
+                      <Icon name="Inbox" size={32} className="opacity-50" />
+                      <p>目前尚無最新消息</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // --- 畫面三：與會者登入/首頁介面 ---
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-white p-10 rounded-[40px] shadow-2xl animate-fade-in relative">
+            <div className="flex justify-center mb-10">
+               <div className="w-20 h-20 bg-orange-100 rounded-3xl flex items-center justify-center">
+                  <Icon name="Users" size={40} className="text-orange-600" />
+               </div>
+            </div>
+            <h1 className="text-2xl font-black text-center mb-8 text-slate-800">活動報到系統</h1>
+            <input 
+              type="text" placeholder="Email 或 手機號碼" 
+              className="w-full p-4 mb-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-orange-500"
+              value={input} onChange={e => setInput(e.target.value)}
+            />
+            <button onClick={() => {
+              const found = db.LIST.find(a => String(a.Email) === input || String(a.Phone) === input);
+              if(found) { setUser(found); setView('dashboard'); } else { alert("查無資料，請確認輸入是否有誤。"); }
+            }} className="w-full bg-[#f37021] text-white p-4 rounded-2xl font-bold mb-4 shadow-lg shadow-orange-200">登入查詢</button>
+            
+            <button onClick={() => setView('scanner')} className="w-full border-2 border-slate-200 text-slate-500 p-4 rounded-2xl font-bold flex items-center justify-center gap-2 mt-4">
+              <Icon name="Camera" size={18} /> 工作人員掃描器
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
