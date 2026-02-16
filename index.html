@@ -31,16 +31,25 @@
     };
 
     function App() {
-      const [db, setDb] = useState({ LIST: [], NEWS: [] });
-      const [view, setView] = useState('lookup'); 
+      const [db, setDb] = useState({ LIST: [], NEWS: [], WORKER: [] });
+      const [view, setView] = useState('lookup'); // lookup, dashboard, staffLogin, scanner
+      
+      // 與會者狀態
       const [user, setUser] = useState(null);
       const [input, setInput] = useState('');
+      
+      // 工作人員狀態
+      const [staffAccount, setStaffAccount] = useState('');
+      const [staffPassword, setStaffPassword] = useState('');
+      const [loggedStaff, setLoggedStaff] = useState(null);
+
+      // 掃描器狀態
       const [scanResult, setScanResult] = useState(null);
       const [isSyncing, setIsSyncing] = useState(false);
       const [scanMode, setScanMode] = useState('checkin');
 
-      // API 網址維持你最新設定的
-      const API = "https://script.google.com/macros/s/AKfycbwBQNQ9jNCBQ0Q-ueRRwyHsKXiY2osB-AQxGNHf_TLyL_WGI2cRu6npzbdMtXA8CkY/exec";
+      // 🌟 已更新為你剛剛提供的最新 API 網址 🌟
+      const API = "https://script.google.com/macros/s/AKfycbwgt11j12Bf3MvXAIc2SPirI-vSdZbtK82JWvZaFQRZSUaQcFqZMXcTl095cYimsBi5/exec";
 
       const loadData = () => {
         fetch(API).then(res => res.json()).then(data => {
@@ -54,6 +63,7 @@
 
       useEffect(() => { loadData(); }, []);
 
+      // 計算統計數據
       const stats = useMemo(() => {
         let vTotal = 0, vIn = 0, nTotal = 0, nIn = 0;
         let mealClaimed = 0, souvenirClaimed = 0;
@@ -62,13 +72,13 @@
           const lv = String(row.Level || row['等級'] || '').toUpperCase();
           if (lv === 'VIP') { vTotal++; if (row['報到時間']) vIn++; }
           else { nTotal++; if (row['報到時間']) nIn++; }
-
           if (row['領餐時間']) mealClaimed++;
           if (row['紀念品領取時間']) souvenirClaimed++;
         });
         return { vTotal, vIn, nTotal, nIn, mealClaimed, souvenirClaimed, totalPeople: vTotal + nTotal };
       }, [db.LIST]);
 
+      // 掃描器邏輯 
       useEffect(() => {
         if (view === 'scanner') {
           const html5QrCode = new Html5Qrcode("reader");
@@ -78,11 +88,9 @@
             (decodedText) => {
               const found = db.LIST.find(a => String(a.ID) === decodedText);
               html5QrCode.stop(); 
-              
               if (found) {
                 setScanResult({ ...found, status: 'found' });
                 setIsSyncing(true);
-                
                 fetch(API, {
                   method: 'POST',
                   body: JSON.stringify({ id: decodedText, action: scanMode }) 
@@ -113,41 +121,79 @@
         }
       }, [view, db.LIST, scanMode]);
 
-      // --- 畫面一：工作人員掃描介面 ---
+      // --- 畫面一：工作人員登入 ---
+      if (view === 'staffLogin') {
+        return (
+          <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 animate-fade-in">
+            <div className="max-w-md w-full bg-slate-800 p-8 rounded-[30px] shadow-2xl border border-slate-700">
+              <div className="flex justify-between items-center mb-6">
+                <button onClick={() => setView('lookup')} className="text-slate-400 hover:text-white"><Icon name="ArrowLeft" /></button>
+                <div className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-xs font-bold tracking-widest flex items-center gap-1"><Icon name="Lock" size={12}/> STAFF ONLY</div>
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-6 text-center">後台管理登入</h2>
+              <input 
+                type="text" placeholder="工作人員帳號" 
+                className="w-full p-4 mb-4 bg-slate-900 text-white border border-slate-700 rounded-xl outline-none focus:border-orange-500"
+                value={staffAccount} onChange={e => setStaffAccount(e.target.value)}
+              />
+              <input 
+                type="password" placeholder="工作人員密碼" 
+                className="w-full p-4 mb-6 bg-slate-900 text-white border border-slate-700 rounded-xl outline-none focus:border-orange-500"
+                value={staffPassword} onChange={e => setStaffPassword(e.target.value)}
+              />
+              <button onClick={() => {
+                const foundStaff = db.WORKER.find(w => String(w['帳號']) === staffAccount && String(w['密碼']) === staffPassword);
+                if(foundStaff) { 
+                  setLoggedStaff(foundStaff); 
+                  setView('scanner'); 
+                  setStaffAccount(''); 
+                  setStaffPassword('');
+                } else { 
+                  alert("帳號或密碼錯誤！\n(請確認試算表中是否有 WORKER 工作表與對應欄位)"); 
+                }
+              }} className="w-full bg-orange-600 text-white p-4 rounded-xl font-bold hover:bg-orange-500 transition">登入掃描系統</button>
+            </div>
+          </div>
+        );
+      }
+
+      // --- 畫面二：工作人員掃描介面 ---
       if (view === 'scanner') {
         return (
           <div className="min-h-screen bg-slate-900 text-white p-4 animate-fade-in flex flex-col">
             <div className="flex justify-between items-center mb-4 mt-2">
-              <h1 className="text-xl font-bold flex items-center gap-2">
-                <Icon name="Camera" /> 管理員模式
+              <h1 className="text-xl font-bold flex items-center gap-2 text-orange-400">
+                <Icon name="Scan" /> 管理員: {loggedStaff?.['姓名'] || '未命名'}
               </h1>
-              <button onClick={() => {setView('lookup'); setScanResult(null);}} className="text-slate-400">關閉</button>
+              <button onClick={() => {setView('lookup'); setScanResult(null); setLoggedStaff(null);}} className="text-slate-400 border border-slate-700 px-3 py-1 rounded-lg text-sm">登出</button>
             </div>
 
-            <div className="bg-slate-800 rounded-2xl p-4 mb-4 grid grid-cols-2 gap-4 text-sm shadow-lg">
-              <div className="bg-slate-700/50 p-3 rounded-xl border border-slate-600">
+            {/* 統計看板 */}
+            <div className="bg-slate-800 rounded-2xl p-4 mb-4 grid grid-cols-2 gap-4 text-sm shadow-lg border border-slate-700">
+              <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
                 <p className="text-slate-400 mb-1 flex items-center gap-1"><Icon name="Star" size={14} className="text-amber-400"/> VIP 報到</p>
                 <p className="text-xl font-bold">{stats.vIn} <span className="text-xs text-slate-500">/ {stats.vTotal}</span></p>
               </div>
-              <div className="bg-slate-700/50 p-3 rounded-xl border border-slate-600">
+              <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
                 <p className="text-slate-400 mb-1 flex items-center gap-1"><Icon name="User" size={14} className="text-blue-400"/> 一般報到</p>
                 <p className="text-xl font-bold">{stats.nIn} <span className="text-xs text-slate-500">/ {stats.nTotal}</span></p>
               </div>
-              <div className="bg-slate-700/50 p-3 rounded-xl border border-slate-600">
+              <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
                 <p className="text-slate-400 mb-1 flex items-center gap-1"><Icon name="Utensils" size={14} className="text-emerald-400"/> 已發餐點</p>
                 <p className="text-xl font-bold">{stats.mealClaimed} <span className="text-xs text-slate-500">/ {stats.totalPeople}</span></p>
               </div>
-              <div className="bg-slate-700/50 p-3 rounded-xl border border-slate-600">
+              <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
                 <p className="text-slate-400 mb-1 flex items-center gap-1"><Icon name="Gift" size={14} className="text-purple-400"/> 已發紀念品</p>
                 <p className="text-xl font-bold">{stats.souvenirClaimed} <span className="text-xs text-slate-500">/ {stats.totalPeople}</span></p>
               </div>
             </div>
 
+            {/* 模式切換按鈕 */}
             {!scanResult && (
               <div className="flex bg-slate-800 p-1 rounded-xl mb-4 shadow-inner">
-                <button onClick={() => setScanMode('checkin')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'checkin' ? 'bg-blue-500 text-white shadow-md' : 'text-slate-400'}`}>報到</button>
-                <button onClick={() => setScanMode('meal')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'meal' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-400'}`}>領餐</button>
-                <button onClick={() => setScanMode('souvenir')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'souvenir' ? 'bg-purple-500 text-white shadow-md' : 'text-slate-400'}`}>紀念品</button>
+                <button onClick={() => setScanMode('checkin')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'checkin' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>報到</button>
+                <button onClick={() => setScanMode('meal')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'meal' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400'}`}>領餐</button>
+                <button onClick={() => setScanMode('souvenir')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'souvenir' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400'}`}>紀念品</button>
               </div>
             )}
             
@@ -191,7 +237,7 @@
         );
       }
 
-      // --- 畫面二：與會者個人頁面 ---
+      // --- 畫面三：與會者個人頁面 (VIP / Normal 色系切換 + 顯示資訊) ---
       if (view === 'dashboard' && user) {
         const isVip = String(user.Level || user['等級'] || '').toUpperCase() === 'VIP';
         const themeBg = isVip ? 'bg-gradient-to-br from-amber-500 to-yellow-600' : 'bg-gradient-to-br from-blue-600 to-indigo-700';
@@ -261,21 +307,27 @@
         );
       }
 
-      // --- 畫面三：與會者登入介面 ---
+      // --- 畫面四：與會者首頁 (徹底修復 Logo 顯示) ---
       return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
           <div className="max-w-md w-full bg-white p-10 rounded-[40px] shadow-2xl animate-fade-in relative">
             
-            {/* 🌟 這裡換成你們的 Logo 🌟 */}
+            {/* 🌟 100% 抓取 GitHub 絕對路徑的 Logo 🌟 */}
             <div className="flex justify-center mb-6">
-               <img src="./logo.png" alt="新動力公關" className="h-16 w-auto object-contain" />
+               <img 
+                 src="https://imprjoseph.github.io/PWA-system/logo.png" 
+                 alt="新動力公關" 
+                 className="h-16 w-auto object-contain" 
+                 onError={(e) => { e.target.style.display='none'; document.getElementById('logo-fallback').style.display='block'; }}
+               />
+               <div id="logo-fallback" className="hidden text-2xl font-black text-orange-600">IMPR 新動力公關</div>
             </div>
             
             <h1 className="text-xl font-bold text-center mb-8 text-slate-600">活動報到系統</h1>
             
             <input 
               type="text" placeholder="請輸入 Email 或 手機號碼" 
-              className="w-full p-4 mb-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition"
+              className="w-full p-4 mb-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-[#f37021] transition"
               value={input} onChange={e => setInput(e.target.value)}
             />
             <button onClick={() => {
@@ -283,7 +335,7 @@
               if(found) { setUser(found); setView('dashboard'); } else { alert("查無資料，請確認輸入是否有誤。"); }
             }} className="w-full bg-[#f37021] text-white p-4 rounded-2xl font-bold mb-4 shadow-lg shadow-orange-200 hover:bg-[#e06117] transition">登入查詢</button>
             
-            <button onClick={() => setView('scanner')} className="w-full border-2 border-slate-100 text-slate-400 p-4 rounded-2xl font-bold flex items-center justify-center gap-2 mt-4 hover:bg-slate-50 transition">
+            <button onClick={() => setView('staffLogin')} className="w-full border-2 border-slate-100 text-slate-400 p-4 rounded-2xl font-bold flex items-center justify-center gap-2 mt-4 hover:bg-slate-50 transition">
               <Icon name="Lock" size={16} /> 工作人員入口
             </button>
           </div>
