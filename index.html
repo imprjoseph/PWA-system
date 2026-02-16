@@ -30,7 +30,7 @@
       return LucideIcon ? <LucideIcon {...props} /> : null;
     };
 
-    // --- 語系翻譯字典 ---
+    // --- 語系翻譯字典 (已移除最新消息與議程相關字眼) ---
     const translations = {
       zh: {
         sysTitle: "活動報到系統",
@@ -51,14 +51,7 @@
         mealClaimed: "餐點已領取",
         mealUnclaimed: "餐點未領取",
         souvenirClaimed: "紀念品已領",
-        souvenirUnclaimed: "紀念品未領",
-        newsTitle: "最新消息",
-        noNews: "目前無最新消息",
-        agendaTitle: "大會議程",
-        noAgenda: "目前無議程資訊",
-        speaker: "講者",
-        moderator: "主持人",
-        location: "地點"
+        souvenirUnclaimed: "紀念品未領"
       },
       en: {
         sysTitle: "Event Check-in System",
@@ -79,19 +72,13 @@
         mealClaimed: "Meal Claimed",
         mealUnclaimed: "Unclaimed",
         souvenirClaimed: "Gift Claimed",
-        souvenirUnclaimed: "Unclaimed",
-        newsTitle: "Latest News",
-        noNews: "No news available.",
-        agendaTitle: "Agenda",
-        noAgenda: "No agenda available.",
-        speaker: "Speaker",
-        moderator: "Moderator",
-        location: "Location"
+        souvenirUnclaimed: "Unclaimed"
       }
     };
 
     function App() {
-      const [db, setDb] = useState({ LIST: [], NEWS: [], WORKER: [], AGENDA: [] });
+      // 狀態中移除 NEWS 與 AGENDA
+      const [db, setDb] = useState({ LIST: [], WORKER: [] });
       const [view, setView] = useState('lookup'); 
       const [user, setUser] = useState(null);
       const [input, setInput] = useState('');
@@ -101,18 +88,10 @@
       const [scanResult, setScanResult] = useState(null);
       const [isSyncing, setIsSyncing] = useState(false);
       const [scanMode, setScanMode] = useState('checkin');
-      
-      // 🌟 新增：語系狀態 (預設中文)
       const [lang, setLang] = useState('zh');
+      
       const t = translations[lang];
-
       const API = "https://script.google.com/macros/s/AKfycbwgt11j12Bf3MvXAIc2SPirI-vSdZbtK82JWvZaFQRZSUaQcFqZMXcTl095cYimsBi5/exec";
-
-      const formatDate = (val) => {
-        if (!val) return '';
-        const str = String(val);
-        return str.includes('T') ? str.split('T')[0] : str;
-      };
 
       const loadData = () => {
         setIsSyncing(true);
@@ -131,7 +110,7 @@
       const stats = useMemo(() => {
         let vTotal = 0, vIn = 0, nTotal = 0, nIn = 0;
         let mealClaimed = 0, souvenirClaimed = 0;
-        db.LIST.forEach(row => {
+        db.LIST?.forEach(row => {
           const lv = String(row.Level || row['等級'] || '').toUpperCase();
           if (lv === 'VIP') { vTotal++; if (row['報到時間']) vIn++; }
           else { nTotal++; if (row['報到時間']) nIn++; }
@@ -178,45 +157,6 @@
         }
       }, [view, db.LIST, scanMode]);
 
-      // 共用元件：最新消息與議程
-      const InfoSection = ({ isDark = false }) => (
-        <div className="mt-6 space-y-4">
-          <div className={`${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-100 text-slate-800'} p-5 rounded-3xl shadow-lg border`}>
-            <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
-              <Icon name="Bell" className="text-orange-500" size={20}/> {t.newsTitle}
-            </h3>
-            {db.NEWS?.length > 0 ? db.NEWS.map((n, i) => (
-              <div key={i} className={`mb-3 pb-3 border-b last:border-0 last:mb-0 last:pb-0 ${isDark ? 'border-slate-700' : 'border-slate-100'}`}>
-                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'} font-bold mb-1`}>
-                  {(n.Date || n['日期']) && `${formatDate(n.Date || n['日期'])} `}{n.Time || n.Times || n['時間']}
-                </p>
-                <p className={`text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>{lang==='en' && n.News ? n.News : (n['內容'] || n.Content || n.News)}</p>
-              </div>
-            )) : <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{t.noNews}</p>}
-          </div>
-
-          <div className={`${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-100 text-slate-800'} p-5 rounded-3xl shadow-lg border`}>
-            <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
-              <Icon name="CalendarDays" className="text-blue-500" size={20}/> {t.agendaTitle}
-            </h3>
-            {db.AGENDA?.length > 0 ? db.AGENDA.map((a, i) => (
-              <div key={i} className={`flex gap-3 mb-4 pb-4 border-b last:border-0 last:mb-0 last:pb-0 ${isDark ? 'border-slate-700' : 'border-slate-100'}`}>
-                <div className="text-sm font-bold text-blue-500 whitespace-nowrap min-w-[4rem]">
-                  {a.DATE && <div className="text-[10px] text-slate-400 mb-0.5">{formatDate(a.DATE)}</div>}
-                  <div>{a.TIME || a['時間']}</div>
-                </div>
-                <div className={`text-sm ${isDark ? 'text-slate-200' : 'text-slate-700'} flex-1`}>
-                  <div className="font-bold text-base mb-1.5">{lang==='en' && a.Item ? a.Item : (a['議程'] || a.Item)}</div>
-                  {a.Speaker && <div className="text-xs flex items-center gap-1.5 mb-1 text-slate-500"><Icon name="User" size={14} className="text-orange-400"/> <span className="font-bold">{t.speaker}:</span> {a.Speaker}</div>}
-                  {a.Moderator && <div className="text-xs flex items-center gap-1.5 mb-1 text-slate-500"><Icon name="Mic" size={14} className="text-emerald-500"/> <span className="font-bold">{t.moderator}:</span> {a.Moderator}</div>}
-                  {a.Location && <div className="text-xs flex items-center gap-1.5 mt-2 text-slate-400"><Icon name="MapPin" size={14} className="text-blue-400"/> {t.location}: {a.Location}</div>}
-                </div>
-              </div>
-            )) : <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{t.noAgenda}</p>}
-          </div>
-        </div>
-      );
-
       // --- 畫面一：工作人員登入 ---
       if (view === 'staffLogin') {
         return (
@@ -230,7 +170,7 @@
               <input type="text" placeholder="帳號 Account" className="w-full p-4 mb-4 bg-slate-900 text-white border border-slate-700 rounded-xl outline-none focus:border-orange-500" value={staffAccount} onChange={e => setStaffAccount(e.target.value)} />
               <input type="password" placeholder="密碼 Password" className="w-full p-4 mb-6 bg-slate-900 text-white border border-slate-700 rounded-xl outline-none focus:border-orange-500" value={staffPassword} onChange={e => setStaffPassword(e.target.value)} />
               <button onClick={() => {
-                const foundStaff = db.WORKER.find(w => String(w['帳號']) === staffAccount && String(w['密碼']) === staffPassword);
+                const foundStaff = db.WORKER?.find(w => String(w['帳號']) === staffAccount && String(w['密碼']) === staffPassword);
                 if(foundStaff) { setLoggedStaff(foundStaff); setView('scanner'); setStaffAccount(''); setStaffPassword(''); } 
                 else { alert("帳號或密碼錯誤！\nInvalid account or password."); }
               }} className="w-full bg-orange-600 text-white p-4 rounded-xl font-bold hover:bg-orange-500">登入 Login</button>
@@ -290,7 +230,6 @@
                 <button onClick={() => setScanResult(null)} disabled={isSyncing} className={`w-full p-4 rounded-xl font-bold ${isSyncing ? 'bg-slate-700 text-slate-500' : 'bg-orange-600 text-white hover:bg-orange-500'}`}>繼續掃描</button>
               </div>
             )}
-            {!scanResult && <InfoSection isDark={true} />}
           </div>
         );
       }
@@ -307,7 +246,6 @@
               <div className="flex justify-between items-center mb-4">
                 <button onClick={() => {setUser(null); setView('lookup'); setInput('');}} className="flex items-center gap-1 font-medium hover:text-slate-200 transition"><Icon name="ArrowLeft" size={20} /> {t.back}</button>
                 <div className="flex items-center gap-2">
-                  {/* 語系切換按鈕 (個人頁面) */}
                   <button onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded-md text-xs font-bold transition">
                     {lang === 'zh' ? 'EN' : '中文'}
                   </button>
@@ -332,21 +270,19 @@
               <div className="w-full bg-white p-6 shadow-xl rounded-[30px] border border-slate-100">
                 <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Icon name="FileText" className="text-slate-400" size={20} /> {t.infoTitle}</h3>
                 
-                {/* 🌟 修正排版：改為靠左對齊，縮短間距 */}
+                {/* 🌟 修改此處排版：取消等寬限制，縮短間距，加上冒號 */}
                 <div className="space-y-3 text-sm mb-6">
                   <div className="flex items-start border-b border-slate-100 pb-2">
-                    <span className="text-slate-500 w-20 shrink-0">{t.company}</span>
-                    <span className="font-bold text-slate-800 flex-1">{user.Company || user['公司'] || '-'}</span>
+                    <span className="text-slate-500 mr-2 shrink-0">{t.company}:</span>
+                    <span className="font-bold text-slate-800">{user.Company || user['公司'] || '-'}</span>
                   </div>
                   <div className="flex items-start border-b border-slate-100 pb-2">
-                    <span className="text-slate-500 w-20 shrink-0">{t.email}</span>
-                    <span className="font-bold text-slate-800 flex-1 break-all">{user.Email || '-'}</span>
+                    <span className="text-slate-500 mr-2 shrink-0">{t.email}:</span>
+                    <span className="font-bold text-slate-800 break-all">{user.Email || '-'}</span>
                   </div>
-                  <div className="flex items-start border-b border-slate-100 pb-2">
-                    <span className="text-slate-500 w-20 shrink-0">{t.dietary}</span>
-                    <span className="flex-1">
-                      <span className={`font-bold border px-2 py-0.5 rounded-md ${badgeBg}`}>{user.Eating || user['餐點'] || t.none}</span>
-                    </span>
+                  <div className="flex items-center border-b border-slate-100 pb-2">
+                    <span className="text-slate-500 mr-2 shrink-0">{t.dietary}:</span>
+                    <span className={`font-bold border px-2 py-0.5 rounded-md ${badgeBg}`}>{user.Eating || user['餐點'] || t.none}</span>
                   </div>
                 </div>
 
@@ -362,9 +298,6 @@
                   </div>
                 </div>
               </div>
-
-              {/* 帶入多語系的最新消息與議程 */}
-              <div className="w-full"><InfoSection isDark={false} /></div>
             </div>
           </div>
         );
@@ -374,7 +307,6 @@
       return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative">
           
-          {/* 語系切換按鈕 (首頁右上角) */}
           <div className="absolute top-6 right-6">
             <button onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} className="bg-white border border-slate-200 text-slate-500 hover:text-orange-500 hover:border-orange-500 shadow-sm px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1">
               <Icon name="Globe" size={14} /> {lang === 'zh' ? 'EN' : '中文'}
@@ -395,7 +327,7 @@
             <input type="text" placeholder={t.loginPlaceholder} className="w-full p-4 mb-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-[#f37021]" value={input} onChange={e => setInput(e.target.value)} />
             
             <button onClick={() => {
-              const found = db.LIST.find(a => String(a.Email) === input || String(a.Phone) === input || String(a.ID) === input);
+              const found = db.LIST?.find(a => String(a.Email) === input || String(a.Phone) === input || String(a.ID) === input);
               if(found) { setUser(found); setView('dashboard'); } else { alert(t.notFound); }
             }} className="w-full bg-[#f37021] text-white p-4 rounded-2xl font-bold mb-4 shadow-lg shadow-orange-200 hover:bg-[#e06117] transition">{t.loginBtn}</button>
             
