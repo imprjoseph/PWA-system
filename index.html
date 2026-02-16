@@ -15,7 +15,7 @@
     @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
     .animate-fade-in { animation: fade-in 0.5s ease-out; }
     body { background-color: #0f172a; margin: 0; font-family: sans-serif; }
-    #reader { width: 100% !important; border: none !important; }
+    #reader { width: 100% !important; border: none !important; border-radius: 1rem; overflow: hidden; }
     #reader__scan_region { background: white; }
   </style>
 </head>
@@ -23,7 +23,7 @@
   <div id="root">系統初始化中...</div>
 
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useMemo } = React;
 
     const Icon = ({ name, ...props }) => {
       const LucideIcon = window.LucideReact ? window.LucideReact[name] : null;
@@ -32,22 +32,43 @@
 
     function App() {
       const [db, setDb] = useState({ LIST: [], NEWS: [] });
-      const [view, setView] = useState('lookup'); // lookup, dashboard, scanner
+      const [view, setView] = useState('lookup'); 
       const [user, setUser] = useState(null);
       const [input, setInput] = useState('');
       const [scanResult, setScanResult] = useState(null);
       const [isSyncing, setIsSyncing] = useState(false);
-      const [scanMode, setScanMode] = useState('checkin'); // checkin (報到), checkout (離場領物)
+      const [scanMode, setScanMode] = useState('checkin');
 
-      // 🌟 已經為你更新為最新的 Google Apps Script API 網址 🌟
-      const API = "https://script.google.com/macros/s/AKfycbwRRewKckgYGGdJf-Z2SOt1tkf98nw_4vZ8o6jMjUZNwZ4DQvhVJBUtfYmnOJArdyI8/exec";
+      // API 網址維持你最新設定的
+      const API = "https://script.google.com/macros/s/AKfycbwBQNQ9jNCBQ0Q-ueRRwyHsKXiY2osB-AQxGNHf_TLyL_WGI2cRu6npzbdMtXA8CkY/exec";
 
-      // 網頁載入時同步 Google Sheet 資料
-      useEffect(() => {
-        fetch(API).then(res => res.json()).then(data => setDb(data));
-      }, []);
+      const loadData = () => {
+        fetch(API).then(res => res.json()).then(data => {
+          setDb(data);
+          if(user) {
+            const updatedUser = data.LIST.find(a => String(a.ID) === String(user.ID));
+            if(updatedUser) setUser(updatedUser);
+          }
+        });
+      };
 
-      // 掃描器邏輯 
+      useEffect(() => { loadData(); }, []);
+
+      const stats = useMemo(() => {
+        let vTotal = 0, vIn = 0, nTotal = 0, nIn = 0;
+        let mealClaimed = 0, souvenirClaimed = 0;
+
+        db.LIST.forEach(row => {
+          const lv = String(row.Level || row['等級'] || '').toUpperCase();
+          if (lv === 'VIP') { vTotal++; if (row['報到時間']) vIn++; }
+          else { nTotal++; if (row['報到時間']) nIn++; }
+
+          if (row['領餐時間']) mealClaimed++;
+          if (row['紀念品領取時間']) souvenirClaimed++;
+        });
+        return { vTotal, vIn, nTotal, nIn, mealClaimed, souvenirClaimed, totalPeople: vTotal + nTotal };
+      }, [db.LIST]);
+
       useEffect(() => {
         if (view === 'scanner') {
           const html5QrCode = new Html5Qrcode("reader");
@@ -56,13 +77,12 @@
             { fps: 10, qrbox: { width: 250, height: 250 } },
             (decodedText) => {
               const found = db.LIST.find(a => String(a.ID) === decodedText);
-              html5QrCode.stop(); // 掃到後立刻停止相機
+              html5QrCode.stop(); 
               
               if (found) {
                 setScanResult({ ...found, status: 'found' });
                 setIsSyncing(true);
                 
-                // 發送 POST 請求寫入時間，附帶目前模式(報到或領物)
                 fetch(API, {
                   method: 'POST',
                   body: JSON.stringify({ id: decodedText, action: scanMode }) 
@@ -71,7 +91,8 @@
                 .then(result => {
                   setIsSyncing(false);
                   if(result.status === "success") {
-                    setScanResult({ ...found, status: 'success' });
+                    setScanResult({ ...found, status: 'success', successMsg: result.message });
+                    loadData(); 
                   } else if (result.status === "warning") {
                     setScanResult({ ...found, status: 'warning', errorMsg: result.message });
                   } else {
@@ -82,7 +103,6 @@
                   setIsSyncing(false);
                   setScanResult({ ...found, status: 'error', errorMsg: '網路連線異常' });
                 });
-
               } else {
                 setScanResult({ Name: "未知代碼", ID: decodedText, status: 'not_found' });
               }
@@ -96,135 +116,144 @@
       // --- 畫面一：工作人員掃描介面 ---
       if (view === 'scanner') {
         return (
-          <div className="min-h-screen bg-slate-900 text-white p-6 animate-fade-in flex flex-col">
-            <div className="flex justify-between items-center mb-6">
+          <div className="min-h-screen bg-slate-900 text-white p-4 animate-fade-in flex flex-col">
+            <div className="flex justify-between items-center mb-4 mt-2">
               <h1 className="text-xl font-bold flex items-center gap-2">
-                <Icon name="Camera" /> 
-                {scanMode === 'checkin' ? '掃描報到' : '掃描離場領物'}
+                <Icon name="Camera" /> 管理員模式
               </h1>
               <button onClick={() => {setView('lookup'); setScanResult(null);}} className="text-slate-400">關閉</button>
             </div>
 
-            {/* 模式切換按鈕 */}
+            <div className="bg-slate-800 rounded-2xl p-4 mb-4 grid grid-cols-2 gap-4 text-sm shadow-lg">
+              <div className="bg-slate-700/50 p-3 rounded-xl border border-slate-600">
+                <p className="text-slate-400 mb-1 flex items-center gap-1"><Icon name="Star" size={14} className="text-amber-400"/> VIP 報到</p>
+                <p className="text-xl font-bold">{stats.vIn} <span className="text-xs text-slate-500">/ {stats.vTotal}</span></p>
+              </div>
+              <div className="bg-slate-700/50 p-3 rounded-xl border border-slate-600">
+                <p className="text-slate-400 mb-1 flex items-center gap-1"><Icon name="User" size={14} className="text-blue-400"/> 一般報到</p>
+                <p className="text-xl font-bold">{stats.nIn} <span className="text-xs text-slate-500">/ {stats.nTotal}</span></p>
+              </div>
+              <div className="bg-slate-700/50 p-3 rounded-xl border border-slate-600">
+                <p className="text-slate-400 mb-1 flex items-center gap-1"><Icon name="Utensils" size={14} className="text-emerald-400"/> 已發餐點</p>
+                <p className="text-xl font-bold">{stats.mealClaimed} <span className="text-xs text-slate-500">/ {stats.totalPeople}</span></p>
+              </div>
+              <div className="bg-slate-700/50 p-3 rounded-xl border border-slate-600">
+                <p className="text-slate-400 mb-1 flex items-center gap-1"><Icon name="Gift" size={14} className="text-purple-400"/> 已發紀念品</p>
+                <p className="text-xl font-bold">{stats.souvenirClaimed} <span className="text-xs text-slate-500">/ {stats.totalPeople}</span></p>
+              </div>
+            </div>
+
             {!scanResult && (
-              <div className="flex bg-slate-800 p-1 rounded-xl mb-6 shadow-inner">
-                <button 
-                  onClick={() => setScanMode('checkin')}
-                  className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${scanMode === 'checkin' ? 'bg-orange-500 text-white shadow-md' : 'text-slate-400'}`}>
-                  入場報到
-                </button>
-                <button 
-                  onClick={() => setScanMode('checkout')}
-                  className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${scanMode === 'checkout' ? 'bg-blue-500 text-white shadow-md' : 'text-slate-400'}`}>
-                  離場領物
-                </button>
+              <div className="flex bg-slate-800 p-1 rounded-xl mb-4 shadow-inner">
+                <button onClick={() => setScanMode('checkin')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'checkin' ? 'bg-blue-500 text-white shadow-md' : 'text-slate-400'}`}>報到</button>
+                <button onClick={() => setScanMode('meal')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'meal' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-400'}`}>領餐</button>
+                <button onClick={() => setScanMode('souvenir')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'souvenir' ? 'bg-purple-500 text-white shadow-md' : 'text-slate-400'}`}>紀念品</button>
               </div>
             )}
             
             {!scanResult ? (
-              <div className={`overflow-hidden rounded-3xl border-2 shadow-[0_0_20px_rgba(0,0,0,0.3)] ${scanMode === 'checkin' ? 'border-orange-500' : 'border-blue-500'}`}>
+              <div className={`overflow-hidden rounded-2xl border-2 shadow-[0_0_20px_rgba(0,0,0,0.3)] ${scanMode === 'checkin' ? 'border-blue-500' : scanMode === 'meal' ? 'border-emerald-500' : 'border-purple-500'}`}>
                 <div id="reader"></div>
               </div>
             ) : (
-              <div className="bg-white text-slate-900 p-8 rounded-[40px] text-center animate-fade-in mt-auto mb-auto">
+              <div className="bg-white text-slate-900 p-8 rounded-3xl text-center animate-fade-in mt-auto mb-auto">
                 <div className={`w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center 
                   ${scanResult.status === 'success' ? 'bg-green-100 text-green-600' : 
                     scanResult.status === 'warning' ? 'bg-yellow-100 text-yellow-600' :
                     scanResult.status === 'not_found' || scanResult.status === 'error' ? 'bg-red-100 text-red-600' : 
                     'bg-slate-100 text-slate-500'}`}>
-                  
                   {isSyncing ? <Icon name="Loader2" className="animate-spin" size={40} /> : 
                    scanResult.status === 'success' ? <Icon name="CheckCircle" size={40} /> : 
                    scanResult.status === 'warning' ? <Icon name="AlertTriangle" size={40} /> : 
                    <Icon name="XCircle" size={40} />}
                 </div>
                 
-                <h2 className="text-2xl font-bold mb-2">{scanResult.Name}</h2>
-                <p className="text-slate-500 mb-2">{scanResult.Company || "無資料"}</p>
+                <h2 className="text-2xl font-bold mb-1">{scanResult.Name}</h2>
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <span className={`px-2 py-0.5 rounded-md text-xs font-bold ${String(scanResult.Level).toUpperCase() === 'VIP' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
+                    {scanResult.Level || 'NORMAL'}
+                  </span>
+                  <span className="text-slate-500">{scanResult.Company || "無公司資料"}</span>
+                </div>
                 
                 <div className="mb-6 h-6">
                   {isSyncing && <span className="text-slate-500 font-bold text-sm">資料同步中...</span>}
-                  {scanResult.status === 'success' && <span className="text-green-600 font-bold text-sm">{scanMode === 'checkin' ? '報到完成！' : '領取完成！'}已寫入時間</span>}
+                  {scanResult.status === 'success' && <span className="text-green-600 font-bold text-sm">{scanResult.successMsg}</span>}
                   {scanResult.status === 'warning' && <span className="text-yellow-600 font-bold text-sm">{scanResult.errorMsg}</span>}
                   {scanResult.status === 'error' && <span className="text-red-500 font-bold text-sm">{scanResult.errorMsg}</span>}
-                  {scanResult.status === 'not_found' && <span className="text-red-500 font-bold text-sm">非本活動與會人員</span>}
+                  {scanResult.status === 'not_found' && <span className="text-red-500 font-bold text-sm">查無此人</span>}
                 </div>
 
-                <button 
-                  onClick={() => setScanResult(null)} 
-                  disabled={isSyncing}
-                  className={`w-full p-4 rounded-2xl font-bold transition-all ${isSyncing ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 text-white shadow-lg'}`}>
-                  繼續掃描
-                </button>
+                <button onClick={() => setScanResult(null)} disabled={isSyncing} className={`w-full p-4 rounded-xl font-bold transition-all ${isSyncing ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 text-white shadow-lg'}`}>繼續掃描</button>
               </div>
-            )}
-            
-            {!scanResult && (
-              <p className="text-center mt-8 text-slate-500 text-sm">
-                目前為 <strong className={scanMode === 'checkin' ? 'text-orange-400' : 'text-blue-400'}>
-                  {scanMode === 'checkin' ? '入場報到' : '離場領物'}
-                </strong> 模式<br/>請將與會者 QR Code 置於方框內
-              </p>
             )}
           </div>
         );
       }
 
-      // --- 畫面二：與會者個人頁面 (Dashboard) ---
-      if (view === 'dashboard') {
+      // --- 畫面二：與會者個人頁面 ---
+      if (view === 'dashboard' && user) {
+        const isVip = String(user.Level || user['等級'] || '').toUpperCase() === 'VIP';
+        const themeBg = isVip ? 'bg-gradient-to-br from-amber-500 to-yellow-600' : 'bg-gradient-to-br from-blue-600 to-indigo-700';
+        const badgeBg = isVip ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-blue-100 text-blue-700 border-blue-200';
+        
         return (
           <div className="min-h-screen bg-slate-50 flex flex-col animate-fade-in pb-10">
-            {/* 上方個人資訊區塊 */}
-            <div className="p-8 bg-orange-600 text-white rounded-b-[50px] shadow-lg relative z-10">
-              <div className="flex justify-between mb-8">
-                <button onClick={() => {setUser(null); setView('lookup'); setInput('');}} className="p-2 -ml-2 hover:bg-white/20 rounded-full transition">
-                  <Icon name="ArrowLeft" />
-                </button>
-                <button className="p-2 -mr-2 hover:bg-white/20 rounded-full transition">
-                  <Icon name="Bell" />
-                </button>
+            <div className={`p-8 ${themeBg} text-white rounded-b-[50px] shadow-lg relative z-10`}>
+              <div className="flex justify-between mb-6">
+                <button onClick={() => {setUser(null); setView('lookup'); setInput('');}} className="p-2 -ml-2 hover:bg-white/20 rounded-full transition"><Icon name="ArrowLeft" /></button>
+                <div className="flex items-center gap-1 font-bold tracking-widest bg-white/20 px-3 py-1 rounded-full text-sm shadow-inner">
+                  {isVip && <Icon name="Star" size={14} className="fill-white" />} {isVip ? 'VIP GUEST' : 'GUEST'}
+                </div>
               </div>
-              <h2 className="text-3xl font-bold mb-2">您好, {user?.Name}</h2>
-              <p className="opacity-80 flex items-center gap-2">
-                <Icon name="MapPin" size={16} /> 歡迎參加本活動
-              </p>
+              <h2 className="text-3xl font-black mb-1">{user.Name}</h2>
+              <p className="opacity-90 font-medium text-lg">{user.Title || user['職稱']}</p>
             </div>
 
-            <div className="px-6 -mt-6 relative z-20 flex flex-col items-center">
-              {/* QR Code 專屬憑證 */}
-              <div className="w-full bg-white p-8 shadow-2xl rounded-[40px] border border-slate-50 flex flex-col items-center mb-8">
-                <div className="p-4 bg-slate-50 rounded-3xl mb-4">
-                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${user?.ID}`} className="w-48 h-48" alt="QR Code" />
+            <div className="px-6 -mt-8 relative z-20 flex flex-col items-center">
+              <div className="w-full bg-white p-6 shadow-2xl rounded-[30px] border border-slate-50 flex flex-col items-center mb-6">
+                <div className="p-3 bg-slate-50 rounded-2xl mb-3 border border-slate-100">
+                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${user.ID}`} className="w-40 h-40" alt="QR Code" />
                 </div>
-                <p className="font-bold text-slate-400 tracking-widest text-xs">YOUR ENTRY QR CODE</p>
+                <p className="font-bold text-slate-400 tracking-widest text-[10px]">ENTRY QR CODE</p>
               </div>
 
-              {/* 最新消息與活動議程區塊 */}
-              <div className="w-full bg-white p-8 shadow-xl rounded-[40px] border border-slate-50">
-                <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-                  <Icon name="CalendarDays" className="text-orange-500" /> 
-                  大會議程 / 最新消息
+              <div className="w-full bg-white p-6 shadow-lg rounded-[30px] border border-slate-50 mb-6">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <Icon name="FileText" className="text-slate-400" size={20} /> 基本資訊
                 </h3>
-                
-                <div className="space-y-5">
-                  {db.NEWS && db.NEWS.length > 0 ? (
-                    db.NEWS.map((item, index) => (
-                      <div key={index} className="relative pl-6 border-l-4 border-orange-200">
-                        <div className="absolute -left-[11px] top-1 w-5 h-5 bg-white border-4 border-orange-500 rounded-full"></div>
-                        <p className="text-orange-600 font-bold text-sm mb-1">
-                          {item.Time || item['時間'] || "最新公告"}
-                        </p>
-                        <p className="text-slate-700 font-medium leading-relaxed">
-                          {item.Content || item['內容'] || item.Title || item['標題']}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-6 text-slate-400 flex flex-col items-center gap-2">
-                      <Icon name="Inbox" size={32} className="opacity-50" />
-                      <p>目前尚無最新消息</p>
-                    </div>
-                  )}
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                    <span className="text-slate-500">所屬公司</span>
+                    <span className="font-bold text-slate-800 text-right">{user.Company || user['公司'] || '-'}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                    <span className="text-slate-500">聯絡信箱</span>
+                    <span className="font-bold text-slate-800 text-right">{user.Email || '-'}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                    <span className="text-slate-500">餐點需求</span>
+                    <span className={`font-bold border px-2 py-0.5 rounded-md ${badgeBg}`}>
+                      {user.Eating || user['餐點'] || '無特別備註'}
+                    </span>
+                  </div>
+                </div>
+
+                <h3 className="text-lg font-bold text-slate-800 mt-6 mb-4 flex items-center gap-2">
+                  <Icon name="CheckCircle" className="text-slate-400" size={20} /> 領取狀態
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center ${user['領餐時間'] ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
+                    <Icon name="Utensils" size={24} className={`mb-1 ${user['領餐時間'] ? 'text-emerald-500' : 'text-slate-300'}`} />
+                    <span className={`font-bold text-sm ${user['領餐時間'] ? 'text-emerald-700' : 'text-slate-500'}`}>{user['領餐時間'] ? '已領餐' : '未領餐'}</span>
+                  </div>
+                  <div className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center ${user['紀念品領取時間'] ? 'bg-purple-50 border-purple-200' : 'bg-slate-50 border-slate-200'}`}>
+                    <Icon name="Gift" size={24} className={`mb-1 ${user['紀念品領取時間'] ? 'text-purple-500' : 'text-slate-300'}`} />
+                    <span className={`font-bold text-sm ${user['紀念品領取時間'] ? 'text-purple-700' : 'text-slate-500'}`}>{user['紀念品領取時間'] ? '已領取' : '未領取'}</span>
+                  </div>
+                </div>
+                <div className="mt-4 flex justify-center">
+                    <button onClick={loadData} className="text-xs flex items-center gap-1 text-slate-400 bg-slate-50 px-3 py-1.5 rounded-full hover:bg-slate-100"><Icon name="RefreshCw" size={12}/> 點擊重整狀態</button>
                 </div>
               </div>
             </div>
@@ -232,28 +261,30 @@
         );
       }
 
-      // --- 畫面三：與會者登入/首頁介面 ---
+      // --- 畫面三：與會者登入介面 ---
       return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
           <div className="max-w-md w-full bg-white p-10 rounded-[40px] shadow-2xl animate-fade-in relative">
-            <div className="flex justify-center mb-10">
-               <div className="w-20 h-20 bg-orange-100 rounded-3xl flex items-center justify-center">
-                  <Icon name="Users" size={40} className="text-orange-600" />
-               </div>
+            
+            {/* 🌟 這裡換成你們的 Logo 🌟 */}
+            <div className="flex justify-center mb-6">
+               <img src="./logo.png" alt="新動力公關" className="h-16 w-auto object-contain" />
             </div>
-            <h1 className="text-2xl font-black text-center mb-8 text-slate-800">活動報到系統</h1>
+            
+            <h1 className="text-xl font-bold text-center mb-8 text-slate-600">活動報到系統</h1>
+            
             <input 
-              type="text" placeholder="Email 或 手機號碼" 
-              className="w-full p-4 mb-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-orange-500"
+              type="text" placeholder="請輸入 Email 或 手機號碼" 
+              className="w-full p-4 mb-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition"
               value={input} onChange={e => setInput(e.target.value)}
             />
             <button onClick={() => {
               const found = db.LIST.find(a => String(a.Email) === input || String(a.Phone) === input);
               if(found) { setUser(found); setView('dashboard'); } else { alert("查無資料，請確認輸入是否有誤。"); }
-            }} className="w-full bg-[#f37021] text-white p-4 rounded-2xl font-bold mb-4 shadow-lg shadow-orange-200">登入查詢</button>
+            }} className="w-full bg-[#f37021] text-white p-4 rounded-2xl font-bold mb-4 shadow-lg shadow-orange-200 hover:bg-[#e06117] transition">登入查詢</button>
             
-            <button onClick={() => setView('scanner')} className="w-full border-2 border-slate-200 text-slate-500 p-4 rounded-2xl font-bold flex items-center justify-center gap-2 mt-4">
-              <Icon name="Camera" size={18} /> 工作人員掃描器
+            <button onClick={() => setView('scanner')} className="w-full border-2 border-slate-100 text-slate-400 p-4 rounded-2xl font-bold flex items-center justify-center gap-2 mt-4 hover:bg-slate-50 transition">
+              <Icon name="Lock" size={16} /> 工作人員入口
             </button>
           </div>
         </div>
