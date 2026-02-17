@@ -30,7 +30,6 @@
       return LucideIcon ? <LucideIcon {...props} /> : null;
     };
 
-    // --- 語系翻譯字典 ---
     const translations = {
       zh: {
         sysTitle: "活動報到系統",
@@ -43,7 +42,7 @@
         refresh: "更新資料",
         qrTitle: "專屬報到憑證",
         infoTitle: "基本資訊",
-        serialId: "序號 ID",  // 新增
+        serialId: "序號 ID",
         company: "所屬公司",
         email: "聯絡信箱",
         dietary: "餐點需求",
@@ -52,7 +51,9 @@
         mealClaimed: "餐點已領取",
         mealUnclaimed: "餐點未領取",
         souvenirClaimed: "紀念品已領",
-        souvenirUnclaimed: "紀念品未領"
+        souvenirUnclaimed: "紀念品未領",
+        manualInput: "手動輸入序號 ID", // 新增
+        manualSubmit: "送出" // 新增
       },
       en: {
         sysTitle: "Event Check-in System",
@@ -65,7 +66,7 @@
         refresh: "Refresh",
         qrTitle: "ENTRY QR CODE",
         infoTitle: "Basic Info",
-        serialId: "Serial ID", // 新增
+        serialId: "Serial ID",
         company: "Company",
         email: "Email",
         dietary: "Dietary",
@@ -74,7 +75,9 @@
         mealClaimed: "Meal Claimed",
         mealUnclaimed: "Unclaimed",
         souvenirClaimed: "Gift Claimed",
-        souvenirUnclaimed: "Unclaimed"
+        souvenirUnclaimed: "Unclaimed",
+        manualInput: "Manual Enter ID", // 新增
+        manualSubmit: "Submit" // 新增
       }
     };
 
@@ -91,8 +94,11 @@
       const [scanMode, setScanMode] = useState('checkin');
       const [lang, setLang] = useState('zh');
       
+      // 🌟 新增：手動輸入 ID 狀態
+      const [manualId, setManualId] = useState('');
+      
       const t = translations[lang];
-      const API = "https://script.google.com/macros/s/AKfycbwgt11j12Bf3MvXAIc2SPirI-vSdZbtK82JWvZaFQRZSUaQcFqZMXcTl095cYimsBi5/exec";
+      const API = "https://script.google.com/macros/s/AKfycbwALn6OxDxqEP3LEmUB5oUuYnXHA-VxHhCLMHwhz5rzGP1p4RUrmi5HoWjF0S8kPf8m/exec";
 
       const dbRef = useRef(db);
       useEffect(() => { dbRef.current = db; }, [db]);
@@ -124,9 +130,38 @@
         return { vTotal, vIn, nTotal, nIn, mealClaimed, souvenirClaimed, totalPeople: vTotal + nTotal };
       }, [db.LIST]);
 
+      // 🌟 核心處理邏輯提取 (供相機與手動輸入共用)
+      const processCheckIn = (idText) => {
+        const currentDb = dbRef.current;
+        const found = currentDb.LIST?.find(a => String(a.ID) === idText);
+        
+        if (found) {
+          setScanResult({ ...found, status: 'found' });
+          setIsSyncing(true);
+          fetch(API, { method: 'POST', body: JSON.stringify({ id: idText, action: scanMode }) })
+          .then(res => res.json())
+          .then(result => {
+            setIsSyncing(false);
+            if(result.status === "success") {
+              setScanResult({ ...found, status: 'success', successMsg: result.message });
+              loadData(); 
+            } else if (result.status === "warning") {
+              setScanResult({ ...found, status: 'warning', errorMsg: result.message });
+            } else {
+              setScanResult({ ...found, status: 'error', errorMsg: '寫入失敗' });
+            }
+          }).catch(() => {
+            setIsSyncing(false);
+            setScanResult({ ...found, status: 'error', errorMsg: '網路連線異常' });
+          });
+        } else {
+          setScanResult({ Name: "未知代碼 / Unknown ID", ID: idText, status: 'not_found' });
+        }
+      };
+
+      // 相機控制
       useEffect(() => {
         let html5QrCode;
-
         if (view === 'scanner' && !scanResult) {
           html5QrCode = new Html5Qrcode("reader");
           html5QrCode.start(
@@ -134,33 +169,8 @@
             { fps: 10, qrbox: { width: 250, height: 250 } },
             (decodedText) => {
               if (html5QrCode.isScanning) {
-                html5QrCode.stop().then(() => {
-                  const currentDb = dbRef.current;
-                  const found = currentDb.LIST?.find(a => String(a.ID) === decodedText);
-                  
-                  if (found) {
-                    setScanResult({ ...found, status: 'found' });
-                    setIsSyncing(true);
-                    fetch(API, { method: 'POST', body: JSON.stringify({ id: decodedText, action: scanMode }) })
-                    .then(res => res.json())
-                    .then(result => {
-                      setIsSyncing(false);
-                      if(result.status === "success") {
-                        setScanResult({ ...found, status: 'success', successMsg: result.message });
-                        loadData(); 
-                      } else if (result.status === "warning") {
-                        setScanResult({ ...found, status: 'warning', errorMsg: result.message });
-                      } else {
-                        setScanResult({ ...found, status: 'error', errorMsg: '寫入失敗' });
-                      }
-                    }).catch(() => {
-                      setIsSyncing(false);
-                      setScanResult({ ...found, status: 'error', errorMsg: '網路連線異常' });
-                    });
-                  } else {
-                    setScanResult({ Name: "未知代碼 / Unknown ID", ID: decodedText, status: 'not_found' });
-                  }
-                }).catch(err => console.error("相機停止失敗", err));
+                // 相機掃到後立刻關閉，轉交給核心處理
+                html5QrCode.stop().then(() => { processCheckIn(decodedText); }).catch(err => console.error(err));
               }
             }, 
             () => {} 
@@ -224,11 +234,32 @@
             )}
             
             {!scanResult ? (
-              <div className={`border-4 shadow-[0_0_20px_rgba(0,0,0,0.5)] rounded-2xl mx-auto overflow-hidden ${scanMode === 'checkin' ? 'border-blue-500' : scanMode === 'meal' ? 'border-emerald-500' : 'border-purple-500'}`}>
-                <div id="reader"></div>
+              <div className="max-w-[320px] mx-auto animate-fade-in">
+                {/* 掃描器外框 */}
+                <div className={`border-4 shadow-[0_0_20px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden mb-4 ${scanMode === 'checkin' ? 'border-blue-500' : scanMode === 'meal' ? 'border-emerald-500' : 'border-purple-500'}`}>
+                  <div id="reader"></div>
+                </div>
+
+                {/* 🌟 新增：手動輸入區塊 */}
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder={t.manualInput} 
+                    className="flex-1 bg-slate-800 border border-slate-700 text-white p-3 rounded-xl outline-none focus:border-orange-500 text-sm"
+                    value={manualId} 
+                    onChange={e => setManualId(e.target.value)}
+                    onKeyPress={e => { if(e.key === 'Enter' && manualId.trim()) processCheckIn(manualId.trim()); }}
+                  />
+                  <button 
+                    onClick={() => { if(manualId.trim()) processCheckIn(manualId.trim()); }} 
+                    className="bg-orange-600 hover:bg-orange-500 text-white px-5 rounded-xl font-bold text-sm transition shadow-lg"
+                  >
+                    {t.manualSubmit}
+                  </button>
+                </div>
               </div>
             ) : (
-              <div className="bg-slate-800 text-white p-8 rounded-3xl text-center border border-slate-700">
+              <div className="bg-slate-800 text-white p-8 rounded-3xl text-center border border-slate-700 mt-4">
                 <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${scanResult.status === 'success' ? 'bg-green-900 text-green-400' : scanResult.status === 'warning' ? 'bg-yellow-900 text-yellow-400' : 'bg-red-900 text-red-400'}`}>
                   {isSyncing ? <Icon name="Loader2" className="animate-spin" size={32} /> : scanResult.status === 'success' ? <Icon name="CheckCircle" size={32} /> : scanResult.status === 'warning' ? <Icon name="AlertTriangle" size={32} /> : <Icon name="XCircle" size={32} />}
                 </div>
@@ -244,7 +275,8 @@
                   {scanResult.status === 'error' && <span className="text-red-400 font-bold text-sm">{scanResult.errorMsg}</span>}
                   {scanResult.status === 'not_found' && <span className="text-red-400 font-bold text-sm">查無此人</span>}
                 </div>
-                <button onClick={() => setScanResult(null)} disabled={isSyncing} className={`w-full p-4 rounded-xl font-bold ${isSyncing ? 'bg-slate-700 text-slate-500' : 'bg-orange-600 text-white hover:bg-orange-500'}`}>繼續掃描</button>
+                {/* 點擊繼續掃描時，同時清空手動輸入框 */}
+                <button onClick={() => {setScanResult(null); setManualId('');}} disabled={isSyncing} className={`w-full p-4 rounded-xl font-bold ${isSyncing ? 'bg-slate-700 text-slate-500' : 'bg-orange-600 text-white hover:bg-orange-500'}`}>繼續作業</button>
               </div>
             )}
           </div>
@@ -288,7 +320,6 @@
                 <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Icon name="FileText" className="text-slate-400" size={20} /> {t.infoTitle}</h3>
                 
                 <div className="space-y-3 text-sm mb-6">
-                  {/* 🌟 新增 ID 欄位顯示 */}
                   <div className="flex items-start border-b border-slate-100 pb-2">
                     <span className="text-slate-500 mr-2 shrink-0 w-[4.5rem]">{t.serialId}:</span>
                     <span className="font-bold text-slate-800 flex-1">{user.ID || '-'}</span>
