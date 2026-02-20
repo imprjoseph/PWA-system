@@ -76,7 +76,7 @@
 
         let firebaseConfig;
         try {
-            firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config) 
+            firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config && __firebase_config.length > 10) 
                 ? JSON.parse(__firebase_config) 
                 : customConfig;
         } catch (e) {
@@ -84,11 +84,13 @@
         }
 
         // 初始化 Firebase
-        if (!firebase.apps.length) {
+        const isConfigReady = firebaseConfig.apiKey !== "";
+        if (!firebase.apps.length && isConfigReady) {
             firebase.initializeApp(firebaseConfig);
         }
-        const db = firebase.firestore();
-        const auth = firebase.auth();
+        
+        const db = isConfigReady ? firebase.firestore() : null;
+        const auth = isConfigReady ? firebase.auth() : null;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'impr-event-pwa-production';
 
         const SHEET_ID = "1oZNmnM9ofMbYY9vcATltOg0IORcBSX2H5Txk9M9_7so";
@@ -101,13 +103,13 @@
                 if (window.lucide) {
                     window.lucide.createIcons();
                 }
-            }, [name]);
+            }, [name, size, className]);
 
             return (
                 <i 
                     data-lucide={name} 
                     style={{ width: size, height: size }} 
-                    className={`inline-block ${className}`}
+                    className={`inline-block align-middle ${className}`}
                 ></i>
             );
         };
@@ -151,19 +153,21 @@
             const [loading, setLoading] = useState(true);
             const [message, setMessage] = useState({ text: '', type: '' });
 
-            // 1. 初始化驗證 (遵循 Rule 3: Auth First)
+            // 1. 初始化驗證
             useEffect(() => {
+                if (!auth) {
+                    setLoading(false);
+                    return;
+                }
                 const initAuth = async () => {
                     try {
-                        // 優先使用系統提供的 Token
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                             await auth.signInWithCustomToken(__initial_auth_token);
                         } else {
                             await auth.signInAnonymously();
                         }
                     } catch (e) { 
-                        console.error("驗證系統連線失敗", e);
-                        setLoading(false);
+                        console.error("驗證失敗", e);
                     }
                 };
 
@@ -176,16 +180,13 @@
                 return () => unsubscribeAuth();
             }, []);
 
-            // 2. 獲取資料 (當 User 存在時才執行，且包含錯誤處理)
+            // 2. 獲取資料
             useEffect(() => {
-                if (!user) return;
+                if (!user || !db) return;
                 
                 const publicDataRef = db.collection('artifacts').doc(appId).collection('public').doc('data');
                 
-                // 成功與錯誤的回調函數
-                const errorFn = (err) => {
-                    console.error("Firestore 監聽失敗 (請確認安全規則):", err);
-                };
+                const errorFn = (err) => console.error("Firestore Error:", err);
 
                 const unsubA = publicDataRef.collection('attendees').onSnapshot(s => {
                     setAttendees(s.docs.map(d => ({id: d.id, ...d.data()})));
@@ -204,15 +205,13 @@
                 }, errorFn);
 
                 return () => {
-                    unsubA();
-                    unsubW();
-                    unsubC();
-                    unsubN();
+                    unsubA(); unsubW(); unsubC(); unsubN();
                 };
             }, [user]);
 
             const handleLookup = (input) => {
                 const term = input.trim().toLowerCase();
+                if (!term) return;
                 const match = attendees.find(a => 
                     String(a.Email || a.email || '').toLowerCase() === term ||
                     String(a.Phone || a.phone || '').replace(/[-\s]/g, '') === term.replace(/[-\s]/g, '')
@@ -243,7 +242,7 @@
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm no-print">
                             <div className="bg-white rounded-[32px] w-full max-w-xs p-8 shadow-2xl text-center scale-in-center">
                                 <div className={`w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center ${message.type === 'error' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
-                                    {message.type === 'error' ? <Icon name="x-circle" /> : <Icon name="info" />}
+                                    <Icon name={message.type === 'error' ? "x-circle" : "info"} />
                                 </div>
                                 <p className="font-bold text-slate-800 mb-6 whitespace-pre-wrap">{message.text}</p>
                                 <button onClick={() => setMessage({text: '', type: ''})} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold uppercase tracking-widest">確定</button>
@@ -308,7 +307,7 @@
                 <div className="flex flex-col h-full bg-slate-50">
                     <div className="print-only">
                         <div className="label-container">
-                            <div className="label-header">{isVIP ? "VIP 貴賓" : "與會嘉賓"}</div>
+                            <div className={`label-header ${isVIP ? 'vip' : ''}`}>{isVIP ? "VIP 貴賓" : "與會嘉賓"}</div>
                             <div className="label-name">{data.Name || data.name}</div>
                             <div className="label-info">{data.Company || data.company}</div>
                             <div className="label-info">{data.Title || data.title}</div>
@@ -324,7 +323,7 @@
                             </div>
                             <div className="flex items-start gap-4 text-left">
                                 <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center text-slate-800 shadow-2xl">
-                                    {isVIP ? <Icon name="medal" size={40} className="text-amber-500"/> : <Icon name="user" size={40} className="text-blue-700"/>}
+                                    <Icon name={isVIP ? "medal" : "user"} size={40} className={isVIP ? "text-amber-500" : "text-blue-700"} />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <h2 className="text-2xl font-black truncate">{data.Name || data.name}</h2>
@@ -356,12 +355,20 @@
                                             <p className={`text-[10px] font-black ${isC('gift') ? 'text-green-700' : 'text-slate-400'}`}>{isC('gift') ? '贈品已領取' : '待領取贈品'}</p>
                                         </div>
                                     </div>
+                                    <div className="grid grid-cols-1 gap-3">
+                                        {Object.entries(data).filter(([k]) => !['id','uid','Passwd','LEVEL','level','Email','Email'].includes(k)).map(([key, val]) => (
+                                            <div key={key} className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col gap-1 shadow-sm text-left">
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{key}</p>
+                                                <p className="text-sm font-bold text-slate-700">{String(val) || "---"}</p>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </>
                             )}
                             {tab === 'agenda' && (
                                 <div className="space-y-4">
                                     {news.length > 0 ? news.map((n, i) => (
-                                        <div key={i} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm text-left">
+                                        <div key={i} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm text-left text-left">
                                             <div className="flex items-center gap-2 mb-2">
                                                 <Icon name="newspaper" size={14} className="text-orange-500" />
                                                 <p className="text-xs font-black text-orange-600 uppercase tracking-widest">{n.Title || n.title}</p>
@@ -407,6 +414,7 @@
             }, [scanRes, attendees]);
 
             const claim = async (type) => {
+                if (!db) return;
                 const docId = `${type}_${scanRes.id}`;
                 await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('claims').doc(docId).set({
                     attendeeId: scanRes.id, item: type, timestamp: new Date().toISOString(), staff: user.Name || 'Staff'
@@ -430,8 +438,8 @@
                             <p className="mt-8 text-xs text-slate-500 animate-pulse font-black tracking-[0.3em] uppercase">Ready to Scan</p>
                         </div>
                     ) : (
-                        <div className="bg-white p-8 rounded-[48px] text-slate-900 animate-in zoom-in duration-300 shadow-2xl text-left">
-                            <div className="inline-block px-3 py-1 rounded-full text-[10px] font-black mb-4 uppercase bg-orange-100 text-orange-600">{scanRes.LEVEL || 'Normal'}</div>
+                        <div className="bg-white p-8 rounded-[48px] text-slate-900 animate-in zoom-in duration-300 shadow-2xl text-left text-left">
+                            <div className={`inline-block px-3 py-1 rounded-full text-[10px] font-black mb-4 uppercase bg-orange-100 text-orange-600`}>{scanRes.LEVEL || 'Normal'}</div>
                             <h3 className="text-3xl font-black mb-1">{scanRes.Name || scanRes.name}</h3>
                             <p className="text-xs font-bold text-slate-400 mb-8 border-b pb-4">{scanRes.Company}</p>
                             <div className="space-y-4">
@@ -446,12 +454,12 @@
         }
 
         // --- 子組件：管理者中心 ---
-        function AdminPanel({ attendees, claims, setView }) {
+        function AdminPanel({ attendees, claims, setView, BrandLogo }) {
             const checkedInCount = useMemo(() => (new Set(claims.map(c => c.attendeeId))).size, [claims]);
             const total = attendees.length || 1;
 
             return (
-                <div className="p-6 space-y-6 h-full overflow-y-auto no-print">
+                <div className="p-6 space-y-6 h-full overflow-y-auto no-print text-left">
                     <div className="flex justify-between items-center">
                         <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Management Panel</h2>
                         <button onClick={() => setView('lookup')} className="p-2 bg-slate-200 rounded-lg">
@@ -460,7 +468,7 @@
                     </div>
                     <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm text-center">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">現場報到率統計</p>
-                        <p className="text-5xl font-black tracking-tighter text-slate-800">{checkedInCount} <span className="text-xl font-bold opacity-20">/ {attendees.length}</span></p>
+                        <p className="text-5xl font-black tracking-tighter text-slate-800 text-center">{checkedInCount} <span className="text-xl font-bold opacity-20">/ {attendees.length}</span></p>
                         <div className="w-full bg-slate-100 h-2 rounded-full mt-6 overflow-hidden">
                             <div className="bg-orange-500 h-full transition-all duration-1000" style={{width: `${(checkedInCount/total)*100}%`}}></div>
                         </div>
@@ -469,7 +477,7 @@
                         <button onClick={() => window.open(GOOGLE_SHEET_URL, '_blank')} className="w-full p-5 bg-[#f37021] text-white rounded-[32px] font-black flex items-center justify-center gap-3 shadow-xl shadow-orange-100 active:scale-95 transition-all">
                             <Icon name="bar-chart-3" size={20} /> 開啟雲端試算表
                         </button>
-                        <p className="text-[10px] text-slate-400 font-bold px-6 leading-relaxed">請確認 Firebase 權限已正確設定，<br/>資料將會在背景自動與與會者 App 同步。</p>
+                        <p className="text-[10px] text-slate-400 font-bold px-6 leading-relaxed text-center">請確認 Firebase 權限已正確設定，<br/>資料將會在背景自動與與會者 App 同步。</p>
                     </div>
                 </div>
             );
