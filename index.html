@@ -34,7 +34,9 @@
             animation: scan 2s linear infinite;
         }
 
-        /* 列印設定 (60x40mm) */
+        /* ========================================== */
+        /* 列印設定區 (60x40mm 標籤)                  */
+        /* ========================================== */
         @media print {
             body, html { margin: 0; padding: 0; background: white !important; }
             .no-print { display: none !important; }
@@ -60,7 +62,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
 
-        // --- Firebase 配置 ---
+        // --- Firebase 配置偵測 ---
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
             apiKey: "", authDomain: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: ""
         };
@@ -74,11 +76,13 @@
         const ATTENDEE_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
         const GOOGLE_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`;
 
+        // --- 圖示組件 ---
         const Icon = ({ name, ...props }) => {
             const LucideIcon = window.LucideReact ? window.LucideReact[name] : null;
             return LucideIcon ? <LucideIcon {...props} /> : null;
         };
 
+        // --- 品牌 Logo ---
         const BrandLogo = ({ className = "w-full", invert = false }) => {
             const logoUrl = "https://imprjoseph.github.io/PWA-system/logo.png";
             const style = invert ? { filter: 'brightness(0) invert(1)' } : {};
@@ -116,7 +120,6 @@
             const [attendees, setAttendees] = useState([]);
             const [workers, setWorkers] = useState([]);
             const [claims, setClaims] = useState([]);
-            const [news, setNews] = useState([]);
             const [loading, setLoading] = useState(true);
             const [message, setMessage] = useState({ text: '', type: '' });
 
@@ -139,8 +142,7 @@
                 const unsubA = dataRef.collection('attendees').onSnapshot(s => setAttendees(s.docs.map(d => ({id: d.id, ...d.data()}))), e => console.error("Attendees error", e));
                 const unsubW = dataRef.collection('workers').onSnapshot(s => setWorkers(s.docs.map(d => ({id: d.id, ...d.data()}))));
                 const unsubC = dataRef.collection('claims').onSnapshot(s => setClaims(s.docs.map(d => ({id: d.id, ...d.data()}))));
-                const unsubN = dataRef.collection('news').onSnapshot(s => setNews(s.docs.map(d => ({id: d.id, ...d.data()}))));
-                return () => { unsubA(); unsubW(); unsubC(); unsubN(); };
+                return () => { unsubA(); unsubW(); unsubC(); };
             }, [user]);
 
             const handleLookup = (input) => {
@@ -160,23 +162,23 @@
                     setUser({ id: 'JOSEPH', Name: 'Joseph Huang', Company: 'IMPR', Title: 'GM', LEVEL: 'VIP' });
                     setView('user-dashboard');
                 } else {
-                    setMessage({ text: '抱歉，系統找不到您的資料。\n請確認輸入是否正確。若為新加入名單，請先執行同步。', type: 'error' });
+                    setMessage({ text: '抱歉，系統找不到您的資料。\n請確認輸入是否正確。', type: 'error' });
                 }
             };
 
             if (loading) return <div className="h-screen flex items-center justify-center bg-white"><BrandLogo className="w-48 animate-pulse" /></div>;
 
             return (
-                <div className="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative flex flex-col overflow-hidden text-center">
+                <div className="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative flex flex-col overflow-hidden text-center text-left">
                     {view === 'lookup' && <Lookup onLogin={handleLookup} setView={setView} BrandLogo={BrandLogo} />}
                     {view === 'staff-login' && <StaffLogin workers={workers} setView={setView} setCurrentUserData={setUser} BrandLogo={BrandLogo} />}
-                    {view === 'user-dashboard' && <UserDashboard data={user} claims={claims} news={news} setView={setView} BrandLogo={BrandLogo} />}
+                    {view === 'user-dashboard' && <UserDashboard data={user} claims={claims} setView={setView} BrandLogo={BrandLogo} />}
                     {view === 'staff-tool' && <StaffTool user={user} attendees={attendees} setView={setView} BrandLogo={BrandLogo} db={db} appId={appId} />}
-                    {view === 'admin-panel' && <AdminPanel attendees={attendees} claims={claims} setView={setView} setMessage={setMessage} db={db} appId={appId} parseCSV={parseCSV} ATTENDEE_CSV_URL={ATTENDEE_CSV_URL} GOOGLE_SHEET_URL={GOOGLE_SHEET_URL} />}
+                    {view === 'admin-panel' && <AdminPanel attendees={attendees} workers={workers} claims={claims} setView={setView} setMessage={setMessage} db={db} appId={appId} parseCSV={parseCSV} ATTENDEE_CSV_URL={ATTENDEE_CSV_URL} GOOGLE_SHEET_URL={GOOGLE_SHEET_URL} />}
                     
                     {message.text && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm no-print">
-                            <div className="bg-white rounded-[32px] w-full max-w-xs p-8 shadow-2xl text-center scale-in-center">
+                            <div className="bg-white rounded-[32px] w-full max-w-xs p-8 shadow-2xl text-center scale-in-center text-center">
                                 <div className={`w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center ${message.type === 'error' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
                                     <Icon name={message.type === 'error' ? "XCircle" : "Info"} size={32} />
                                 </div>
@@ -195,7 +197,7 @@
                 <div className="p-10 flex flex-1 flex-col items-center justify-center text-center">
                     <BrandLogo className="mb-10 w-full" />
                     <h1 className="text-xl font-black mb-2 tracking-tight text-slate-800">活動報到查詢</h1>
-                    <p className="text-slate-400 text-sm mb-10 leading-relaxed">請輸入報名 Email 或手機號碼</p>
+                    <p className="text-slate-400 text-sm mb-10 leading-relaxed italic">請輸入報名 Email 或手機號碼</p>
                     <input type="text" placeholder="Email / 手機號碼" className="w-full p-4 bg-slate-50 rounded-2xl border mb-4 text-center outline-none focus:ring-2 focus:ring-orange-500 font-bold" value={val} onChange={e => setVal(e.target.value)} onKeyPress={e => e.key === 'Enter' && onLogin(val)} />
                     <button onClick={() => onLogin(val)} className="w-full bg-[#f37021] text-white p-4 rounded-2xl font-black shadow-lg hover:bg-orange-600 transition-all">登入查詢</button>
                     <button onClick={() => setView('staff-login')} className="mt-12 text-slate-300 text-xs font-bold hover:text-orange-500 flex items-center gap-1 justify-center"><Icon name="Lock" size={14} /> 工作人員入口</button>
@@ -216,19 +218,18 @@
                 } else { alert("驗證失敗：帳號或密碼不正確。"); }
             };
             return (
-                <div className="p-10 flex flex-1 flex-col items-center justify-center bg-slate-50">
+                <div className="p-10 flex flex-1 flex-col items-center justify-center bg-slate-50 text-center">
                     <BrandLogo className="mb-10 w-full" />
-                    <h2 className="text-lg font-black mb-8 text-slate-700 border-b-4 border-orange-500 pb-1 uppercase">後台管理登入</h2>
+                    <h2 className="text-lg font-black mb-8 text-slate-700 border-b-4 border-orange-500 pb-1 uppercase text-center">後台管理登入</h2>
                     <input type="text" placeholder="帳號 Account" className="w-full p-4 mb-4 bg-white rounded-2xl border outline-none shadow-sm" value={acc} onChange={e => setAcc(e.target.value)} />
                     <input type="password" placeholder="密碼 Password" className="w-full p-4 mb-6 bg-white rounded-2xl border outline-none shadow-sm" value={pw} onChange={e => setPw(e.target.value)} />
-                    <button onClick={login} className="w-full bg-slate-900 text-white p-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all">登入 Login</button>
+                    <button onClick={login} className="w-full bg-slate-900 text-white p-4 rounded-2xl font-black shadow-lg">登入 Login</button>
                     <button onClick={() => setView('lookup')} className="mt-8 text-slate-400 text-xs font-bold underline">返回首頁</button>
                 </div>
             );
         }
 
-        function UserDashboard({ data, claims, news, setView, BrandLogo }) {
-            const [tab, setTab] = useState('profile');
+        function UserDashboard({ data, claims, setView, BrandLogo }) {
             const isVIP = checkIsVIP(data);
             const isC = (type) => claims.some(c => c.attendeeId === (data.id || data.ID) && c.item === type);
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(data.id || data.ID || '')}`;
@@ -236,7 +237,7 @@
             return (
                 <div className="flex flex-col h-full bg-slate-50 overflow-hidden text-left">
                     <div className="print-only">
-                        <div className="label-container">
+                        <div className="label-container text-center">
                             <div className="label-header">{isVIP ? "VIP 貴賓" : "與會嘉賓"}</div>
                             <div className="label-name">{data.Name || data.name || data['姓名']}</div>
                             <div className="label-title">{data.Title || data.title || data['職稱']}</div>
@@ -249,50 +250,31 @@
                             <div className="flex justify-between items-center mb-6"><BrandLogo invert className="w-28" /><button onClick={() => setView('lookup')} className="p-2 bg-white/20 rounded-lg"><Icon name="LogOut" size={18}/></button></div>
                             <div className="flex items-center gap-5">
                                 <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center text-slate-800 shadow-2xl shrink-0">{isVIP ? <Icon name="Medal" size={40} className="text-amber-500"/> : <Icon name="User" size={40} className="text-blue-700"/>}</div>
-                                <div className="flex-1 min-w-0">
+                                <div className="flex-1 min-w-0 text-left">
                                     <h2 className="text-2xl font-black truncate">{data.Name || data.name || data['姓名']}</h2>
                                     <p className="text-xs font-bold opacity-90 truncate">{data.Company || data.company || data['公司']}</p>
                                     <p className="text-[10px] opacity-70 truncate uppercase tracking-widest">{data.Title || data.title || data['職稱']}</p>
                                 </div>
                             </div>
                         </div>
-                        <div className="flex bg-white mx-5 -mt-6 rounded-2xl shadow-xl p-1 shrink-0 z-10 text-center">
-                            <button onClick={() => setTab('profile')} className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${tab === 'profile' ? 'bg-orange-50 text-orange-600' : 'text-slate-300'}`}>我的憑證</button>
-                            <button onClick={() => setTab('agenda')} className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${tab === 'agenda' ? 'bg-orange-50 text-orange-600' : 'text-slate-300'}`}>大會公告</button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                            {tab === 'profile' && (
-                                <>
-                                    <div className="bg-white p-6 rounded-[40px] flex flex-col items-center shadow-sm border border-slate-100 text-center">
-                                        <div className="p-3 bg-slate-50 rounded-3xl mb-4 border border-slate-100"><img src={qrUrl} className="w-44 h-44" alt="QR" /></div>
-                                        <button onClick={() => window.print()} className="flex items-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-full text-xs font-black shadow-lg"><Icon name="Printer" size={16}/> 列印實體標籤</button>
+
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6 pt-10">
+                            <div className="bg-white p-6 rounded-[40px] flex flex-col items-center shadow-sm border border-slate-100 text-center">
+                                <div className="p-3 bg-slate-50 rounded-3xl mb-4 border border-slate-100"><img src={qrUrl} className="w-44 h-44" alt="QR" /></div>
+                                <button onClick={() => window.print()} className="flex items-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-full text-xs font-black shadow-lg active:scale-95 transition-all"><Icon name="Printer" size={16}/> 列印實體標籤</button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 text-center">
+                                <div className={`p-4 rounded-3xl border text-center ${isC('meal') ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}><Icon name="Utensils" className={isC('meal') ? 'text-green-500' : 'text-slate-200'} /><p className={`text-[10px] mt-1 font-bold ${isC('meal') ? 'text-green-700' : 'text-slate-400'}`}>{isC('meal') ? '餐點已領取' : '餐點未領取'}</p></div>
+                                <div className={`p-4 rounded-3xl border text-center ${isC('gift') ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}><Icon name="Gift" className={isC('gift') ? 'text-green-500' : 'text-slate-200'} /><p className={`text-[10px] mt-1 font-bold ${isC('gift') ? 'text-green-700' : 'text-slate-400'}`}>{isC('gift') ? '贈品已領取' : '贈品未領取'}</p></div>
+                            </div>
+                            <div className="grid grid-cols-1 gap-3">
+                                {Object.entries(data).filter(([k]) => !['id','uid','Passwd','LEVEL','level','Email','type','姓名','公司','職稱','等級','信箱'].includes(k)).map(([key, val]) => (
+                                    <div key={key} className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col gap-1 shadow-sm text-left text-left">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{key}</p>
+                                        <p className="text-sm font-bold text-slate-700">{String(val) || "---"}</p>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className={`p-4 rounded-3xl border text-center ${isC('meal') ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}><Icon name="Utensils" className={isC('meal') ? 'text-green-500' : 'text-slate-200'} /><p className={`text-[10px] mt-1 font-bold ${isC('meal') ? 'text-green-700' : 'text-slate-400'}`}>{isC('meal') ? '餐點已領取' : '餐點未領取'}</p></div>
-                                        <div className={`p-4 rounded-3xl border text-center ${isC('gift') ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}><Icon name="Gift" className={isC('gift') ? 'text-green-500' : 'text-slate-200'} /><p className={`text-[10px] mt-1 font-bold ${isC('gift') ? 'text-green-700' : 'text-slate-400'}`}>{isC('gift') ? '贈品已領取' : '贈品未領取'}</p></div>
-                                    </div>
-                                    <div className="grid grid-cols-1 gap-3">
-                                        {Object.entries(data).filter(([k]) => !['id','uid','Passwd','LEVEL','level','Email','type','姓名','公司','職稱','等級','信箱'].includes(k)).map(([key, val]) => (
-                                            <div key={key} className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col gap-1 shadow-sm">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{key}</p>
-                                                <p className="text-sm font-bold text-slate-700">{String(val) || "---"}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </>
-                            )}
-                            {tab === 'agenda' && (
-                                <div className="space-y-4">
-                                    {news.length > 0 ? news.map((n, i) => (
-                                        <div key={i} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
-                                            <div className="flex items-center gap-2 mb-2 text-orange-600 font-black text-xs">
-                                                <Icon name="Bell" size={14} />{n.Title || n.title || n['標題']}
-                                            </div>
-                                            <p className="text-xs text-slate-500 leading-relaxed">{n.Content || n.content || n['內容']}</p>
-                                        </div>
-                                    )) : <div className="text-center py-20 text-slate-300 font-bold italic">目前尚無大會公告</div>}
-                                </div>
-                            )}
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -319,21 +301,22 @@
                 alert("核銷成功！"); setScanRes(null);
             };
             return (
-                <div className="flex flex-col h-full bg-slate-900 text-white p-6 no-print">
-                    <div className="flex justify-between mb-8"><div className="flex items-center gap-2 text-orange-400 text-xs font-bold uppercase"><Icon name="Camera" size={18} />QR 核銷系統</div><button onClick={() => setView('lookup')} className="text-xs font-bold opacity-40">結束作業</button></div>
+                <div className="flex flex-col h-full bg-slate-900 text-white p-6 no-print text-center">
+                    <div className="flex justify-between mb-8"><div className="flex items-center gap-2 text-orange-400 text-xs font-bold uppercase text-left text-left"><Icon name="Camera" size={18} />QR 核銷系統</div><button onClick={() => setView('lookup')} className="text-xs font-bold opacity-40">結束作業</button></div>
                     {!scanRes ? <div id="reader" className="w-full bg-black rounded-[40px] aspect-square relative border-2 border-white/5 shadow-2xl overflow-hidden"><div className="scan-line"></div></div> : (
-                        <div className="bg-white p-8 rounded-[48px] text-slate-900 animate-in zoom-in duration-300 shadow-2xl text-left"><div className="inline-block px-3 py-1 rounded-full text-[10px] font-black mb-4 uppercase bg-orange-100 text-orange-600">{scanRes.LEVEL || scanRes['等級'] || 'GUEST'}</div><h3 className="text-3xl font-black mb-1">{scanRes.Name || scanRes['姓名']}</h3><p className="text-xs font-bold text-slate-400 mb-8 border-b pb-4">{scanRes.Company || scanRes['公司']}</p><div className="space-y-4"><button onClick={() => claim('meal')} className="w-full py-5 bg-orange-600 text-white rounded-3xl font-black shadow-lg">發放餐點</button><button onClick={() => claim('gift')} className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black shadow-lg">發放紀念品</button><button onClick={() => setScanRes(null)} className="w-full py-3 text-slate-300 text-xs font-bold uppercase text-center tracking-widest">取消重掃</button></div></div>
+                        <div className="bg-white p-8 rounded-[48px] text-slate-900 animate-in zoom-in duration-300 shadow-2xl text-left"><div className="inline-block px-3 py-1 rounded-full text-[10px] font-black mb-4 uppercase bg-orange-100 text-orange-600">{scanRes.LEVEL || scanRes['等級'] || 'GUEST'}</div><h3 className="text-3xl font-black mb-1">{scanRes.Name || scanRes['姓名']}</h3><p className="text-xs font-bold text-slate-400 mb-8 border-b pb-4">{scanRes.Company || scanRes['公司']}</p><div className="space-y-4"><button onClick={() => claim('meal')} className="w-full py-5 bg-orange-600 text-white rounded-3xl font-black shadow-lg uppercase">發放餐點</button><button onClick={() => claim('gift')} className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black shadow-lg uppercase">發放紀念品</button><button onClick={() => setScanRes(null)} className="w-full py-3 text-slate-300 text-xs font-bold uppercase text-center tracking-widest">取消重掃</button></div></div>
                     )}
                 </div>
             );
         }
 
-        function AdminPanel({ attendees, claims, setView, setMessage, db, appId, parseCSV, ATTENDEE_CSV_URL, GOOGLE_SHEET_URL }) {
+        function AdminPanel({ attendees, workers, news, claims, setView, setMessage, db, appId, parseCSV, ATTENDEE_CSV_URL, GOOGLE_SHEET_URL }) {
             const [syncing, setSyncing] = useState(false);
             const [syncUrl, setSyncUrl] = useState('');
             const checkedInCount = useMemo(() => (new Set(claims.map(c => c.attendeeId))).size, [claims]);
 
             const syncData = async (target, url) => {
+                if (!url) return setMessage({ text: '請輸入正確的分頁網址', type: 'error' });
                 setSyncing(true);
                 try {
                     const csvUrl = url.includes('/edit') ? url.replace('/edit', '/export?format=csv') : url;
@@ -344,7 +327,6 @@
                         if (r.length < 2) return;
                         const obj = {}; head.forEach((h, i) => {
                             let key = h.trim();
-                            // 標頭正規化
                             if (key === '姓名') key = 'Name';
                             if (key === '公司') key = 'Company';
                             if (key === '職稱') key = 'Title';
@@ -357,30 +339,38 @@
                     });
                     await batch.commit();
                     setMessage({ text: `✅ ${target} 同步成功！\n成功將 ${dataRows.length} 筆資料寫入資料庫。`, type: 'success' });
-                } catch (e) { setMessage({ text: '❌ 同步失敗，請確認試算表權限已開啟。', type: 'error' }); }
+                } catch (e) { setMessage({ text: '❌ 同步失敗。', type: 'error' }); }
                 finally { setSyncing(false); }
             };
 
             return (
                 <div className="p-6 space-y-6 h-full overflow-y-auto no-print text-left bg-slate-50">
-                    <div className="flex justify-between items-center text-center"><h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Management Panel</h2><button onClick={() => setView('lookup')}><Icon name="LogOut" size={16} /></button></div>
+                    <div className="flex justify-between items-center text-center">
+                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Management Panel</h2>
+                        <button onClick={() => setView('lookup')}><Icon name="LogOut" size={16} /></button>
+                    </div>
+
                     <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm text-center">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-center">與會者報到率</p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-center text-center">與會者報到率</p>
                         <p className="text-5xl font-black tracking-tighter text-slate-800 text-center">{checkedInCount} <span className="text-xl font-bold opacity-20">/ {attendees.length}</span></p>
                     </div>
-                    <div className="space-y-4 pt-4 text-center">
-                        <button onClick={() => syncData('attendees', ATTENDEE_CSV_URL)} disabled={syncing} className="w-full p-4 bg-orange-50 text-orange-600 rounded-2xl font-black border border-orange-200 flex items-center justify-center gap-2 active:scale-95">
-                            <Icon name="DownloadCloud" size={18}/> 同步與會者名單 (gid=0)
+
+                    <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
+                        <p className="text-[10px] font-black text-slate-400 uppercase">工作人員數</p>
+                        <p className="text-xl font-black text-slate-800">{workers.length}</p>
+                    </div>
+
+                    <div className="space-y-4 pt-4 text-center text-left">
+                        <button onClick={() => syncData('attendees', ATTENDEE_CSV_URL)} disabled={syncing} className="w-full p-4 bg-orange-50 text-orange-600 rounded-2xl font-black border border-orange-200 flex items-center justify-center gap-2">
+                            <Icon name={syncing ? "Loader2" : "DownloadCloud"} size={18} className={syncing ? "animate-spin" : ""} />
+                            {syncing ? '同步中...' : '同步與會者名單 (gid=0)'}
                         </button>
                         <div className="bg-white p-5 rounded-3xl border border-slate-100 space-y-3">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">分頁資料同步 (Worker / NEWS)</p>
-                            <input type="text" placeholder="貼上分頁完整網址 (需含 gid)" className="w-full p-3 bg-slate-50 border rounded-xl text-xs outline-none focus:ring-1 focus:ring-slate-300" value={syncUrl} onChange={e => setSyncUrl(e.target.value)} />
-                            <div className="flex gap-2">
-                                <button onClick={() => syncData('workers', syncUrl)} disabled={syncing} className="flex-1 py-3 bg-slate-800 text-white rounded-xl text-xs font-bold">同步工作人員</button>
-                                <button onClick={() => syncData('news', syncUrl)} disabled={syncing} className="flex-1 py-3 bg-blue-600 text-white rounded-xl text-xs font-bold">同步大會公告</button>
-                            </div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">分頁資料同步 (Worker)</p>
+                            <input type="text" placeholder="貼上分頁完整網址" className="w-full p-3 bg-slate-50 border rounded-xl text-xs outline-none" value={syncUrl} onChange={e => setSyncUrl(e.target.value)} />
+                            <button onClick={() => syncData('workers', syncUrl)} disabled={syncing} className="w-full py-3 bg-slate-800 text-white rounded-xl text-xs font-bold">同步工作人員名單</button>
                         </div>
-                        <button onClick={() => window.open(GOOGLE_SHEET_URL, '_blank')} className="w-full p-5 bg-[#f37021] text-white rounded-[32px] font-black flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all"><Icon name="BarChart3" size={20} /> 開啟雲端試算表</button>
+                        <button onClick={() => window.open(GOOGLE_SHEET_URL, '_blank')} className="w-full p-5 bg-[#f37021] text-white rounded-[32px] font-black flex items-center justify-center gap-3 active:scale-95 transition-all"><Icon name="BarChart3" size={20} /> 開啟雲端試算表</button>
                     </div>
                 </div>
             );
