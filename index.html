@@ -12,6 +12,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- 圖示與掃描器 -->
+    <!-- 修正: 確保載入的是基礎版 lucide，而不是會報錯的 react 版本 -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     
@@ -78,10 +79,29 @@
         const ATTENDEE_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
         const GOOGLE_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`;
 
-        // --- 圖示組件 ---
-        const Icon = ({ name, ...props }) => {
-            const LucideIcon = window.LucideReact ? window.LucideReact[name] : null;
-            return LucideIcon ? <LucideIcon {...props} /> : null;
+        // --- 修正後的圖示組件 ---
+        // 直接使用全域的 lucide 來繪製 SVG，不依賴有問題的 react 封裝版
+        const Icon = ({ name, size = 24, className = "" }) => {
+            const iconRef = useRef(null);
+            
+            useEffect(() => {
+                if (iconRef.current && window.lucide) {
+                    // 確保使用 kebab-case (例如 LogOut -> log-out)
+                    const iconName = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+                    window.lucide.createIcons({
+                        icons: { [iconName]: window.lucide.icons[iconName] },
+                        nameAttr: 'data-lucide',
+                        attrs: {
+                            class: className,
+                            width: size,
+                            height: size,
+                        }
+                    });
+                }
+            }, [name, size, className]);
+
+            const kebabName = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+            return <i ref={iconRef} data-lucide={kebabName}></i>;
         };
 
         // --- 品牌 Logo ---
@@ -237,7 +257,6 @@
             );
         }
 
-        // --- 重新排版與精簡的與會者儀表板 ---
         function UserDashboard({ data, claims, setView, BrandLogo }) {
             const isVIP = checkIsVIP(data);
             const isC = (type) => claims.some(c => c.attendeeId === (data.id || data.ID) && c.item === type);
@@ -255,7 +274,7 @@
                     </div>
                     
                     <div className="no-print h-full flex flex-col">
-                        <div className={`${isVIP ? 'bg-gradient-to-br from-amber-500 to-orange-600' : 'bg-blue-800'} p-6 text-white pb-16 shadow-xl shrink-0`}>
+                        <div className={`${isVIP ? 'bg-gradient-to-br from-amber-500 to-orange-600' : 'bg-blue-800'} p-6 text-white pb-12 shadow-xl shrink-0`}>
                             <div className="flex justify-between items-center mb-6">
                                 <BrandLogo invert className="w-28" />
                                 <button onClick={() => setView('lookup')} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-all"><Icon name="LogOut" size={18}/></button>
@@ -272,7 +291,7 @@
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6 -mt-8 z-10">
+                        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6 pt-6 z-10">
                             <div className="bg-white p-6 rounded-[32px] flex flex-col items-center shadow-xl border border-slate-100 text-center">
                                 <div className="p-3 bg-slate-50 rounded-3xl mb-6 border border-slate-100 text-center">
                                     <img src={qrUrl} className="w-48 h-48" alt="QR" />
@@ -375,7 +394,7 @@
                     {/* 即時數據欄 */}
                     <div className="bg-slate-800/50 rounded-3xl p-4 mb-4 grid grid-cols-2 gap-3 text-left border border-white/5 shadow-2xl">
                         <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5">
-                            <p className="text-[10px] font-black text-amber-500 uppercase mb-1 flex items-center gap-1"><Icon name="Star" size={10} className="fill-amber-500"/> VIP 報到</p>
+                            <p className="text-[10px] font-black text-amber-500 uppercase mb-1 flex items-center gap-1"><Icon name="Star" size={10} className="text-amber-500"/> VIP 報到</p>
                             <p className="text-xl font-black">{stats.vIn} <span className="text-[10px] text-slate-500 font-bold">/ {stats.vTotal}</span></p>
                         </div>
                         <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5">
