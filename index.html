@@ -5,15 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>新動力公關 - 活動管理系統</title>
     
-    <!-- 基礎套件載入 -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- 基礎套件載入 (加入 crossorigin 確保錯誤能正確顯示) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 圖示與掃描器 -->
-    <!-- 修正: 確保載入的是基礎版 lucide，而不是會報錯的 react 版本 -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- 替換為 Google Material Icons (最穩定，絕不會造成 JS 白屏報錯) -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+    
+    <!-- QR Code 掃描器 -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     
     <!-- Firebase (Compat 版本) -->
@@ -49,7 +50,7 @@
                 display: flex; flex-direction: column; justify-content: center; align-items: center;
                 text-align: center; box-sizing: border-box; page-break-after: always;
             }
-            .label-header { font-size: 8pt; font-weight: bold; color: #666; margin-bottom: 1.5mm; border-bottom: 1px solid #f37021; width: 100%; }
+            .label-header { font-size: 8pt; font-weight: bold; color: #666; margin-bottom: 1.5mm; border-bottom: 1px solid #f37021; width: 100%; text-transform: uppercase; }
             .label-name { font-size: 20pt; font-weight: 900; margin-bottom: 1.5mm; color: black; line-height: 1.2; }
             .label-title { font-size: 10pt; font-weight: 600; color: #333; margin-bottom: 0.5mm; }
             .label-company { font-size: 9pt; font-weight: bold; color: #555; }
@@ -65,12 +66,18 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
 
-        // --- Firebase 配置偵測 ---
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "", authDomain: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: ""
-        };
+        // --- 安全的 Firebase 配置解析 (防止 JSON.parse 報錯導致白屏) ---
+        let firebaseConfig = { apiKey: "", authDomain: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: "" };
+        try {
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                firebaseConfig = JSON.parse(__firebase_config);
+            }
+        } catch (e) { console.warn("Firebase Config 解析失敗，使用預設空值"); }
 
-        if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+        if (!firebase.apps.length && firebaseConfig.apiKey) { 
+            firebase.initializeApp(firebaseConfig); 
+        }
+        
         const db = firebase.firestore();
         const auth = firebase.auth();
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'impr-event-pwa-production';
@@ -79,30 +86,12 @@
         const ATTENDEE_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
         const GOOGLE_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`;
 
-        // --- 修正後的圖示組件 ---
-        // 直接使用全域的 lucide 來繪製 SVG，不依賴有問題的 react 封裝版
-        const Icon = ({ name, size = 24, className = "" }) => {
-            const iconRef = useRef(null);
-            
-            useEffect(() => {
-                if (iconRef.current && window.lucide) {
-                    // 確保使用 kebab-case (例如 LogOut -> log-out)
-                    const iconName = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
-                    window.lucide.createIcons({
-                        icons: { [iconName]: window.lucide.icons[iconName] },
-                        nameAttr: 'data-lucide',
-                        attrs: {
-                            class: className,
-                            width: size,
-                            height: size,
-                        }
-                    });
-                }
-            }, [name, size, className]);
-
-            const kebabName = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
-            return <i ref={iconRef} data-lucide={kebabName}></i>;
-        };
+        // --- 超穩定圖示組件 (Google Material Symbols) ---
+        const Icon = ({ name, size = 24, className = "" }) => (
+            <span className={`material-symbols-outlined align-middle ${className}`} style={{ fontSize: size, lineHeight: 1 }}>
+                {name}
+            </span>
+        );
 
         // --- 品牌 Logo ---
         const BrandLogo = ({ className = "w-full", invert = false }) => {
@@ -160,9 +149,9 @@
             }, []);
 
             useEffect(() => {
-                if (!user) return;
+                if (!user || !firebaseConfig.apiKey) return;
                 const dataRef = db.collection('artifacts').doc(appId).collection('public').doc('data');
-                const unsubA = dataRef.collection('attendees').onSnapshot(s => setAttendees(s.docs.map(d => ({id: d.id, ...d.data()}))), e => console.error("Attendees error", e));
+                const unsubA = dataRef.collection('attendees').onSnapshot(s => setAttendees(s.docs.map(d => ({id: d.id, ...d.data()}))), e => console.error(e));
                 const unsubW = dataRef.collection('workers').onSnapshot(s => setWorkers(s.docs.map(d => ({id: d.id, ...d.data()}))));
                 const unsubC = dataRef.collection('claims').onSnapshot(s => setClaims(s.docs.map(d => ({id: d.id, ...d.data()}))));
                 return () => { unsubA(); unsubW(); unsubC(); };
@@ -206,9 +195,9 @@
                     
                     {message.text && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm no-print">
-                            <div className="bg-white rounded-[32px] w-full max-w-xs p-8 shadow-2xl text-center scale-in-center text-center">
+                            <div className="bg-white rounded-[32px] w-full max-w-xs p-8 shadow-2xl text-center scale-in-center">
                                 <div className={`w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center ${message.type === 'error' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
-                                    <Icon name={message.type === 'error' ? "XCircle" : "Info"} size={32} />
+                                    <Icon name={message.type === 'error' ? "cancel" : "info"} size={32} />
                                 </div>
                                 <p className="font-bold text-slate-800 mb-6 whitespace-pre-wrap leading-relaxed">{message.text}</p>
                                 <button onClick={() => setMessage({text: '', type: ''})} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold uppercase">確定</button>
@@ -228,7 +217,7 @@
                     <p className="text-slate-400 text-sm mb-10 leading-relaxed italic">請輸入報名 Email 或手機號碼</p>
                     <input type="text" placeholder="Email / 手機號碼" className="w-full p-4 bg-slate-50 rounded-2xl border mb-4 text-center outline-none focus:ring-2 focus:ring-orange-500 font-bold" value={val} onChange={e => setVal(e.target.value)} onKeyPress={e => e.key === 'Enter' && onLogin(val)} />
                     <button onClick={() => onLogin(val)} className="w-full bg-[#f37021] text-white p-4 rounded-2xl font-black shadow-lg hover:bg-orange-600 transition-all">登入查詢</button>
-                    <button onClick={() => setView('staff-login')} className="mt-12 text-slate-300 text-xs font-bold hover:text-orange-500 flex items-center gap-1 justify-center"><Icon name="Lock" size={14} /> 工作人員入口</button>
+                    <button onClick={() => setView('staff-login')} className="mt-12 text-slate-300 text-xs font-bold hover:text-orange-500 flex items-center gap-1 justify-center"><Icon name="lock" size={14} /> 工作人員入口</button>
                 </div>
             );
         }
@@ -248,7 +237,7 @@
             return (
                 <div className="p-10 flex flex-1 flex-col items-center justify-center bg-slate-50 text-center">
                     <BrandLogo className="mb-10 w-full" />
-                    <h2 className="text-lg font-black mb-8 text-slate-700 border-b-4 border-orange-500 pb-1 uppercase text-center">後台管理登入</h2>
+                    <h2 className="text-lg font-black mb-8 text-slate-700 border-b-4 border-orange-500 pb-1 uppercase">後台管理登入</h2>
                     <input type="text" placeholder="帳號 Account" className="w-full p-4 mb-4 bg-white rounded-2xl border outline-none shadow-sm text-center" value={acc} onChange={e => setAcc(e.target.value)} />
                     <input type="password" placeholder="密碼 Password" className="w-full p-4 mb-6 bg-white rounded-2xl border outline-none shadow-sm text-center" value={pw} onChange={e => setPw(e.target.value)} />
                     <button onClick={login} className="w-full bg-slate-900 text-white p-4 rounded-2xl font-black shadow-lg active:scale-95">登入 Login</button>
@@ -257,13 +246,14 @@
             );
         }
 
+        // --- 專注於憑證與列印的與會者頁面 ---
         function UserDashboard({ data, claims, setView, BrandLogo }) {
             const isVIP = checkIsVIP(data);
             const isC = (type) => claims.some(c => c.attendeeId === (data.id || data.ID) && c.item === type);
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(data.id || data.ID || '')}`;
 
             return (
-                <div className="flex flex-col h-full bg-slate-50 overflow-hidden text-left text-left">
+                <div className="flex flex-col h-full bg-slate-50 overflow-hidden text-left">
                     <div className="print-only">
                         <div className="label-container text-center">
                             <div className="label-header">{isVIP ? "VIP 貴賓" : "與會嘉賓"}</div>
@@ -274,14 +264,14 @@
                     </div>
                     
                     <div className="no-print h-full flex flex-col">
-                        <div className={`${isVIP ? 'bg-gradient-to-br from-amber-500 to-orange-600' : 'bg-blue-800'} p-6 text-white pb-12 shadow-xl shrink-0`}>
+                        <div className={`${isVIP ? 'bg-gradient-to-br from-amber-500 to-orange-600' : 'bg-blue-800'} p-6 text-white pb-8 shadow-xl shrink-0`}>
                             <div className="flex justify-between items-center mb-6">
                                 <BrandLogo invert className="w-28" />
-                                <button onClick={() => setView('lookup')} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-all"><Icon name="LogOut" size={18}/></button>
+                                <button onClick={() => setView('lookup')} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-all"><Icon name="logout" size={18}/></button>
                             </div>
                             <div className="flex items-center gap-5">
                                 <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center text-slate-800 shadow-2xl shrink-0">
-                                    {isVIP ? <Icon name="Medal" size={40} className="text-amber-500"/> : <Icon name="User" size={40} className="text-blue-700"/>}
+                                    {isVIP ? <Icon name="workspace_premium" size={40} className="text-amber-500"/> : <Icon name="person" size={40} className="text-blue-700"/>}
                                 </div>
                                 <div className="flex-1 min-w-0 text-left">
                                     <h2 className="text-2xl font-black truncate">{data.Name || data.name || data['姓名']}</h2>
@@ -291,24 +281,24 @@
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6 pt-6 z-10">
+                        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6 pt-8 z-10">
                             <div className="bg-white p-6 rounded-[32px] flex flex-col items-center shadow-xl border border-slate-100 text-center">
-                                <div className="p-3 bg-slate-50 rounded-3xl mb-6 border border-slate-100 text-center">
+                                <div className="p-3 bg-slate-50 rounded-3xl mb-6 border border-slate-100">
                                     <img src={qrUrl} className="w-48 h-48" alt="QR" />
                                 </div>
                                 <button onClick={() => window.print()} className="w-full py-4 bg-slate-900 text-white rounded-2xl text-sm font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
-                                    <Icon name="Printer" size={20}/> 
+                                    <Icon name="print" size={20}/> 
                                     列印專屬標籤
                                 </button>
                             </div>
                             
                             <div className="grid grid-cols-2 gap-4 text-center">
                                 <div className={`p-4 rounded-3xl border text-center shadow-sm ${isC('meal') ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}>
-                                    <Icon name="Utensils" className={`mx-auto mb-2 ${isC('meal') ? 'text-green-500' : 'text-slate-300'}`} size={28} />
+                                    <Icon name="restaurant" className={`mx-auto mb-2 ${isC('meal') ? 'text-green-500' : 'text-slate-300'}`} size={28} />
                                     <p className={`text-[10px] font-black ${isC('meal') ? 'text-green-700' : 'text-slate-400'}`}>{isC('meal') ? '餐點已領取' : '餐點未領取'}</p>
                                 </div>
                                 <div className={`p-4 rounded-3xl border text-center shadow-sm ${isC('gift') ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}>
-                                    <Icon name="Gift" className={`mx-auto mb-2 ${isC('gift') ? 'text-green-500' : 'text-slate-300'}`} size={28} />
+                                    <Icon name="redeem" className={`mx-auto mb-2 ${isC('gift') ? 'text-green-500' : 'text-slate-300'}`} size={28} />
                                     <p className={`text-[10px] font-black ${isC('gift') ? 'text-green-700' : 'text-slate-400'}`}>{isC('gift') ? '贈品已領取' : '贈品未領取'}</p>
                                 </div>
                             </div>
@@ -327,12 +317,10 @@
             );
         }
 
-        // --- 工作人員工具組件 (增加更新資料按鈕與統計) ---
         function StaffTool({ user, attendees, claims, setView, db, appId, triggerRefresh, refreshing }) {
             const [scanRes, setScanRes] = useState(null);
             const scannerRef = useRef(null);
 
-            // 計算統計數據
             const stats = useMemo(() => {
                 const checkedInIds = new Set(claims.filter(c => c.item === 'checkin').map(c => c.attendeeId));
                 let vIn = 0, nIn = 0, vTotal = 0, nTotal = 0;
@@ -365,7 +353,6 @@
                 await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('claims').doc(`${type}_${id}`).set({
                     attendeeId: id, item: type, timestamp: new Date().toISOString(), staff: user.Name || user['姓名'] || 'Staff'
                 });
-                // 自動記錄入場報到 (若尚無紀錄)
                 if (type !== 'checkin' && !claims.some(c => c.attendeeId === id && c.item === 'checkin')) {
                     await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('claims').doc(`checkin_${id}`).set({
                         attendeeId: id, item: 'checkin', timestamp: new Date().toISOString(), staff: user.Name || user['姓名'] || 'Staff'
@@ -379,54 +366,53 @@
                 <div className="flex flex-col h-full bg-slate-900 text-white p-4 no-print text-center">
                     <div className="flex justify-between items-center mb-4 mt-2 text-left">
                         <div className="flex items-center gap-2 text-orange-400 text-sm font-bold uppercase">
-                            <Icon name="UserCheck" size={20} />
+                            <Icon name="how_to_reg" size={20} />
                             <span>{user?.['姓名'] || user?.Name || '工作人員'}</span>
                         </div>
                         <div className="flex gap-2">
                             <button onClick={triggerRefresh} className="flex items-center gap-1 bg-white/10 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-white/20 transition-all">
-                                <Icon name="RefreshCw" size={14} className={refreshing ? "animate-spin" : ""} />
+                                <Icon name="refresh" size={14} className={refreshing ? "animate-spin" : ""} />
                                 更新
                             </button>
                             <button onClick={() => setView('lookup')} className="bg-white/10 px-3 py-1.5 rounded-xl text-xs font-bold">結束</button>
                         </div>
                     </div>
 
-                    {/* 即時數據欄 */}
                     <div className="bg-slate-800/50 rounded-3xl p-4 mb-4 grid grid-cols-2 gap-3 text-left border border-white/5 shadow-2xl">
                         <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5">
-                            <p className="text-[10px] font-black text-amber-500 uppercase mb-1 flex items-center gap-1"><Icon name="Star" size={10} className="text-amber-500"/> VIP 報到</p>
+                            <p className="text-[10px] font-black text-amber-500 uppercase mb-1 flex items-center gap-1"><Icon name="star" size={10}/> VIP 報到</p>
                             <p className="text-xl font-black">{stats.vIn} <span className="text-[10px] text-slate-500 font-bold">/ {stats.vTotal}</span></p>
                         </div>
                         <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5">
-                            <p className="text-[10px] font-black text-blue-500 uppercase mb-1 flex items-center gap-1"><Icon name="Users" size={10}/> 一般報到</p>
+                            <p className="text-[10px] font-black text-blue-500 uppercase mb-1 flex items-center gap-1"><Icon name="group" size={10}/> 一般報到</p>
                             <p className="text-xl font-black">{stats.nIn} <span className="text-[10px] text-slate-500 font-bold">/ {stats.nTotal}</span></p>
                         </div>
                         <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5">
-                            <p className="text-[10px] font-black text-emerald-500 uppercase mb-1 flex items-center gap-1"><Icon name="Utensils" size={10}/> 領餐</p>
+                            <p className="text-[10px] font-black text-emerald-500 uppercase mb-1 flex items-center gap-1"><Icon name="restaurant" size={10}/> 領餐</p>
                             <p className="text-xl font-black">{stats.mealClaimed} <span className="text-[10px] text-slate-500 font-bold">/ {stats.total}</span></p>
                         </div>
                         <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5">
-                            <p className="text-[10px] font-black text-purple-500 uppercase mb-1 flex items-center gap-1"><Icon name="Gift" size={10}/> 領禮物</p>
+                            <p className="text-[10px] font-black text-purple-500 uppercase mb-1 flex items-center gap-1"><Icon name="redeem" size={10}/> 領禮物</p>
                             <p className="text-xl font-black">{stats.giftClaimed} <span className="text-[10px] text-slate-500 font-bold">/ {stats.total}</span></p>
                         </div>
                     </div>
 
                     {!scanRes ? (
                         <div className="flex flex-col items-center flex-1 justify-center">
-                            <div id="reader" className="w-full bg-black rounded-[40px] aspect-square relative border-2 border-white/5 shadow-2xl overflow-hidden text-center">
-                                <div className="scan-line text-center"></div>
+                            <div id="reader" className="w-full bg-black rounded-[40px] aspect-square relative border-2 border-white/5 shadow-2xl overflow-hidden">
+                                <div className="scan-line"></div>
                             </div>
-                            <p className="mt-8 text-xs text-slate-500 animate-pulse font-black tracking-[0.3em] uppercase text-center text-center">Ready to Scan</p>
+                            <p className="mt-8 text-xs text-slate-500 animate-pulse font-black tracking-[0.3em] uppercase">Ready to Scan</p>
                         </div>
                     ) : (
-                        <div className="bg-white p-8 rounded-[48px] text-slate-900 animate-in zoom-in duration-300 shadow-2xl text-left text-left">
+                        <div className="bg-white p-8 rounded-[48px] text-slate-900 animate-in zoom-in duration-300 shadow-2xl text-left">
                             <div className="inline-block px-3 py-1 rounded-full text-[10px] font-black mb-4 uppercase bg-orange-100 text-orange-600">{scanRes.LEVEL || scanRes['等級'] || 'GUEST'}</div>
                             <h3 className="text-3xl font-black mb-1">{scanRes.Name || scanRes['姓名']}</h3>
                             <p className="text-xs font-bold text-slate-400 mb-8 border-b pb-4">{scanRes.Company || scanRes['公司']}</p>
                             <div className="space-y-4">
-                                <button onClick={() => claim('meal')} className="w-full py-5 bg-orange-600 text-white rounded-3xl font-black shadow-lg uppercase text-center">確認領取餐點</button>
-                                <button onClick={() => claim('gift')} className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black shadow-lg uppercase text-center">確認領取紀念品</button>
-                                <button onClick={() => setScanRes(null)} className="w-full py-3 text-slate-300 text-xs font-bold uppercase text-center tracking-widest text-center">取消並重掃</button>
+                                <button onClick={() => claim('meal')} className="w-full py-5 bg-orange-600 text-white rounded-3xl font-black shadow-lg uppercase">確認領取餐點</button>
+                                <button onClick={() => claim('gift')} className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black shadow-lg uppercase">確認領取紀念品</button>
+                                <button onClick={() => setScanRes(null)} className="w-full py-3 text-slate-300 text-xs font-bold uppercase text-center tracking-widest block mx-auto">取消並重掃</button>
                             </div>
                         </div>
                     )}
@@ -462,39 +448,39 @@
                         batch.set(db.collection('artifacts').doc(appId).collection('public').doc('data').collection(target).doc(docId), obj);
                     });
                     await batch.commit();
-                    setMessage({ text: `✅ ${target} 同步成功！\n成功將 ${dataRows.length} 筆資料寫入資料庫。`, type: 'success' });
+                    setMessage({ text: `✅ ${target} 同步成功！\n成功寫入 ${dataRows.length} 筆資料。`, type: 'success' });
                 } catch (e) { setMessage({ text: '❌ 同步失敗。', type: 'error' }); }
                 finally { setSyncing(false); }
             };
 
             return (
-                <div className="p-6 space-y-6 h-full overflow-y-auto no-print text-left bg-slate-50 text-left">
-                    <div className="flex justify-between items-center text-center">
-                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400 text-left">Management Panel</h2>
-                        <button onClick={() => setView('lookup')}><Icon name="LogOut" size={16} /></button>
+                <div className="p-6 space-y-6 h-full overflow-y-auto no-print text-left bg-slate-50">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Management Panel</h2>
+                        <button onClick={() => setView('lookup')}><Icon name="logout" size={16} /></button>
                     </div>
 
-                    <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm text-center text-center">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-center text-center">與會者報到率</p>
-                        <p className="text-5xl font-black tracking-tighter text-slate-800 text-center">{checkedInCount} <span className="text-xl font-bold opacity-20">/ {attendees.length}</span></p>
+                    <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm text-center">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">與會者報到率</p>
+                        <p className="text-5xl font-black tracking-tighter text-slate-800">{checkedInCount} <span className="text-xl font-bold opacity-20">/ {attendees.length}</span></p>
                     </div>
 
-                    <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm text-left">
+                    <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
                         <p className="text-[10px] font-black text-slate-400 uppercase">工作人員數</p>
                         <p className="text-xl font-black text-slate-800">{workers.length}</p>
                     </div>
 
-                    <div className="space-y-4 pt-4 text-center text-left text-left">
-                        <button onClick={() => syncData('attendees', ATTENDEE_CSV_URL)} disabled={syncing} className="w-full p-4 bg-orange-50 text-orange-600 rounded-2xl font-black border border-orange-200 flex items-center justify-center gap-2 active:scale-95 text-center">
-                            <Icon name={syncing ? "Loader2" : "DownloadCloud"} size={18} className={syncing ? "animate-spin" : ""} />
+                    <div className="space-y-4 pt-4 text-center">
+                        <button onClick={() => syncData('attendees', ATTENDEE_CSV_URL)} disabled={syncing} className="w-full p-4 bg-orange-50 text-orange-600 rounded-2xl font-black border border-orange-200 flex items-center justify-center gap-2 active:scale-95">
+                            <Icon name={syncing ? "sync" : "cloud_download"} size={18} className={syncing ? "animate-spin" : ""} />
                             {syncing ? '同步中...' : '同步與會者名單 (gid=0)'}
                         </button>
                         <div className="bg-white p-5 rounded-3xl border border-slate-100 space-y-3 text-left">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center text-center">分頁資料同步 (Worker)</p>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">分頁資料同步 (Worker)</p>
                             <input type="text" placeholder="貼上分頁完整網址" className="w-full p-3 bg-slate-50 border rounded-xl text-xs outline-none focus:ring-1 focus:ring-slate-300" value={syncUrl} onChange={e => setSyncUrl(e.target.value)} />
-                            <button onClick={() => syncData('workers', syncUrl)} disabled={syncing} className="w-full py-3 bg-slate-800 text-white rounded-xl text-xs font-bold active:scale-95 text-center">同步工作人員名單</button>
+                            <button onClick={() => syncData('workers', syncUrl)} disabled={syncing} className="w-full py-3 bg-slate-800 text-white rounded-xl text-xs font-bold active:scale-95">同步工作人員名單</button>
                         </div>
-                        <button onClick={() => window.open(GOOGLE_SHEET_URL, '_blank')} className="w-full p-5 bg-[#f37021] text-white rounded-[32px] font-black flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all text-center"><Icon name="BarChart3" size={20} /> 開啟雲端試算表</button>
+                        <button onClick={() => window.open(GOOGLE_SHEET_URL, '_blank')} className="w-full p-5 bg-[#f37021] text-white rounded-[32px] font-black flex items-center justify-center gap-3 shadow-xl active:scale-95"><Icon name="bar_chart" size={20} /> 開啟雲端試算表</button>
                     </div>
                 </div>
             );
