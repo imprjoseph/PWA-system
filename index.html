@@ -107,6 +107,7 @@
                 logout: "登出",
                 attendanceStats: "現場出席統計",
                 syncList: "同步與會者名單",
+                refresh: "更新名單",
                 vipAttendance: "VIP 貴賓出席",
                 normalAttendance: "一般與會者",
                 mealGiven: "餐點發放",
@@ -127,6 +128,8 @@
                 syncWorkerLabel: "同步工作人員 (Worker) 分頁",
                 pasteWorkerUrl: "貼上 Worker 分頁網址",
                 syncBtn: "同步人員名單",
+                forceUpdate: "強制更新資料 (從試算表抓取最新)",
+                updating: "更新中...",
             },
             en: {
                 lookupTitle: "Event Check-in",
@@ -161,6 +164,7 @@
                 logout: "Logout",
                 attendanceStats: "Attendance Stats",
                 syncList: "Sync Attendees",
+                refresh: "Refresh",
                 vipAttendance: "VIP Attendance",
                 normalAttendance: "General Attendance",
                 mealGiven: "Meals Distributed",
@@ -181,6 +185,8 @@
                 syncWorkerLabel: "Sync Staff (Worker) Sheet",
                 pasteWorkerUrl: "Paste Worker Sheet URL",
                 syncBtn: "Sync Staff",
+                forceUpdate: "Force Update Data (Fetch from Sheet)",
+                updating: "Updating...",
             }
         };
 
@@ -236,7 +242,9 @@
 
             const loadData = () => {
                 setIsSyncing(true);
-                fetch(API_URL)
+                // 加入快取剋星 (Cache Buster)，確保永遠抓取最新的資料，解決新增後查不到的問題
+                const noCacheUrl = `${API_URL}?t=${new Date().getTime()}`;
+                fetch(noCacheUrl)
                     .then(res => res.json())
                     .then(data => {
                         setDbData(data);
@@ -292,7 +300,7 @@
 
             return (
                 <div className="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative flex flex-col overflow-hidden text-left">
-                    {view === 'lookup' && <Lookup onLogin={handleLookup} setView={setView} BrandLogo={BrandLogo} lang={lang} setLang={setLang} t={t} />}
+                    {view === 'lookup' && <Lookup onLogin={handleLookup} setView={setView} BrandLogo={BrandLogo} lang={lang} setLang={setLang} t={t} loadData={loadData} isSyncing={isSyncing} />}
                     {view === 'staff-login' && <StaffLogin workers={dbData.WORKER || []} setView={setView} setCurrentUserData={setUser} BrandLogo={BrandLogo} t={t} />}
                     {view === 'user-dashboard' && <UserDashboard data={user} setView={setView} BrandLogo={BrandLogo} loadData={loadData} isSyncing={isSyncing} lang={lang} setLang={setLang} t={t} />}
                     {view === 'staff-tool' && <StaffTool user={user} dbData={dbData} setView={setView} loadData={loadData} isSyncing={isSyncing} t={t} />}
@@ -302,16 +310,26 @@
         }
 
         // --- 子組件：一般查詢 ---
-        function Lookup({ onLogin, setView, BrandLogo, lang, setLang, t }) {
+        function Lookup({ onLogin, setView, BrandLogo, lang, setLang, t, loadData, isSyncing }) {
             const [val, setVal] = useState('');
             return (
                 <div className="p-10 flex flex-1 flex-col items-center justify-center text-center relative no-print">
-                    <button 
-                        onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
-                        className="absolute top-6 right-6 flex items-center gap-1 text-slate-400 font-bold text-sm bg-slate-50 px-3 py-1.5 rounded-full hover:text-orange-500 transition-colors"
-                    >
-                        <Icon name="language" size={16} /> {lang === 'zh' ? 'EN' : '中文'}
-                    </button>
+                    {/* 右上角工具列：包含更新按鈕與語言切換 */}
+                    <div className="absolute top-6 right-6 flex items-center gap-2">
+                        <button 
+                            onClick={loadData}
+                            disabled={isSyncing}
+                            className="flex items-center gap-1 text-slate-400 font-bold text-sm bg-slate-50 px-3 py-1.5 rounded-full hover:text-orange-500 transition-colors disabled:opacity-50"
+                        >
+                            <Icon name="sync" size={16} className={isSyncing ? "animate-spin" : ""} /> {t.refresh}
+                        </button>
+                        <button 
+                            onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+                            className="flex items-center gap-1 text-slate-400 font-bold text-sm bg-slate-50 px-3 py-1.5 rounded-full hover:text-orange-500 transition-colors"
+                        >
+                            <Icon name="language" size={16} /> {lang === 'zh' ? 'EN' : '中文'}
+                        </button>
+                    </div>
 
                     <BrandLogo className="mb-10 w-full mt-8" />
                     <h1 className="text-xl font-black mb-2 tracking-tight text-slate-800">{t.lookupTitle}</h1>
@@ -600,10 +618,20 @@
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t.attendanceStats}</p>
                             <p className="text-3xl font-black text-slate-800">{checkedInCount} <span className="text-sm text-slate-300">/ {dbData.LIST?.length || 0}</span></p>
                         </div>
-                        <button onClick={loadData} className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
-                            <Icon name="sync" size={24} className={isSyncing ? "animate-spin" : ""} />
-                        </button>
+                        <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-400">
+                            <Icon name="groups" size={24} />
+                        </div>
                     </div>
+
+                    {/* 強制更新資料按鈕 */}
+                    <button 
+                        onClick={loadData} 
+                        disabled={isSyncing} 
+                        className={`w-full p-4 rounded-2xl font-black flex items-center justify-center gap-2 shadow-sm transition-all ${isSyncing ? 'bg-slate-200 text-slate-500' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:scale-95 border border-emerald-200'}`}
+                    >
+                        <Icon name={isSyncing ? "sync" : "cloud_sync"} size={20} className={isSyncing ? "animate-spin" : ""} />
+                        {isSyncing ? t.updating : t.forceUpdate}
+                    </button>
 
                     <div className="bg-white p-6 rounded-[32px] border border-blue-100 shadow-lg">
                         <div className="flex items-center gap-2 mb-4 text-blue-700">
