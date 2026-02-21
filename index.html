@@ -420,21 +420,20 @@
             );
         }
 
-        // --- 子組件：工作人員核銷工具 ---
+        // --- 子組件：工作人員核銷工具 (修正相機閃退問題) ---
         function StaffTool({ user, dbData, setView, loadData, isSyncing, t }) {
             const [scanRes, setScanRes] = useState(null);
-            const [scanMode, setScanMode] = useState('checkin'); // checkin, meal, souvenir
+            const [scanMode, setScanMode] = useState('checkin');
             const [manualId, setManualId] = useState('');
             const scannerRef = useRef(null);
-
-            // 為了避免掃描器因為 scanMode 或 dbData 改變而重新整理導致閃退消失，我們使用 useRef 來保存最新狀態
+            
+            // 使用 useRef 儲存最新的掃描模式，避免相機因為依賴變更而一直重新掛載
             const scanModeRef = useRef(scanMode);
             const dbDataRef = useRef(dbData);
             
             useEffect(() => { scanModeRef.current = scanMode; }, [scanMode]);
             useEffect(() => { dbDataRef.current = dbData; }, [dbData]);
 
-            // 計算目前狀況
             const stats = useMemo(() => {
                 let vIn = 0, nIn = 0, vTotal = 0, nTotal = 0, mealClaimed = 0, giftClaimed = 0;
                 dbData.LIST?.forEach((a) => {
@@ -448,7 +447,7 @@
             }, [dbData.LIST]);
 
             const processCheckIn = (idText) => {
-                const currentMode = scanModeRef.current; // 取得最新的掃描模式
+                const currentMode = scanModeRef.current;
                 const found = dbDataRef.current.LIST?.find(a => String(a.ID) === idText || String(a.id) === idText);
                 if (found) {
                     setScanRes({ ...found, status: 'found' });
@@ -462,29 +461,40 @@
                 } else { setScanRes({ Name: "未知代碼", ID: idText, status: 'not_found', msg: '查無此人' }); }
             };
 
+            // 最穩定的相機初始化寫法
             useEffect(() => {
                 let html5QrCode;
-                // 只有在 scanRes 是 null 時，才初始化相機
-                if (!scanRes && document.getElementById("reader")) {
-                    html5QrCode = new window.Html5Qrcode("reader");
-                    html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } },
-                        (decodedText) => { 
-                            if (html5QrCode.isScanning) { 
-                                html5QrCode.pause(); // 掃到後先暫停相機，避免重複觸發
-                                processCheckIn(decodedText); 
-                            } 
-                        }, () => {}
-                    ).catch(e => console.error("Camera Init Error:", e));
-                    scannerRef.current = html5QrCode;
-                }
                 
-                // 元件卸載或 scanRes 改變時，如果相機還開著，就關閉它
-                return () => { 
-                    if (scannerRef.current && scannerRef.current.isScanning) { 
-                        scannerRef.current.stop().catch(e => {}); 
-                    } 
-                };
-            }, [scanRes]); // 依賴陣列中只有 scanRes，這樣切換 scanMode 就絕對不會讓掃描器閃退
+                if (!scanRes) {
+                    const timer = setTimeout(() => {
+                        if (document.getElementById("reader")) {
+                            html5QrCode = new window.Html5Qrcode("reader");
+                            html5QrCode.start(
+                                { facingMode: "environment" },
+                                { fps: 10, qrbox: { width: 250, height: 250 } },
+                                (decodedText) => {
+                                    // 掃描到後，立刻停止相機並處理結果
+                                    if (html5QrCode.isScanning) {
+                                        html5QrCode.stop().then(() => {
+                                            processCheckIn(decodedText);
+                                        }).catch(err => console.log("Stop error", err));
+                                    }
+                                },
+                                (err) => { /* 忽略頻繁的解析錯誤 */ }
+                            ).catch(err => console.log("Camera Start Error:", err));
+                            
+                            scannerRef.current = html5QrCode;
+                        }
+                    }, 100); // 確保 DOM 渲染完畢
+                    
+                    return () => {
+                        clearTimeout(timer);
+                        if (scannerRef.current && scannerRef.current.isScanning) {
+                            scannerRef.current.stop().catch(err => console.log("Cleanup error", err));
+                        }
+                    };
+                }
+            }, [scanRes]); // 只在 scanRes (掃描結果) 改變時才重新執行相機
 
             return (
                 <div className="flex flex-col h-full bg-slate-900 text-white p-4 no-print text-center">
@@ -495,12 +505,14 @@
                             <button onClick={() => setView('lookup')} className="bg-white/10 px-3 py-1.5 rounded-xl text-xs font-bold">{t.logout}</button>
                         </div>
                     </div>
+                    
                     <div className="bg-slate-800/50 rounded-3xl p-4 mb-4 grid grid-cols-2 gap-3 text-left border border-white/5 shadow-2xl">
                         <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5"><p className="text-[10px] font-black text-amber-500 uppercase mb-1 flex items-center gap-1"><Icon name="star" size={10}/> {t.vipAttendance}</p><p className="text-xl font-black">{stats.vIn} <span className="text-[10px] text-slate-500 font-bold">/ {stats.vTotal}</span></p></div>
                         <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5"><p className="text-[10px] font-black text-blue-500 uppercase mb-1 flex items-center gap-1"><Icon name="group" size={10}/> {t.normalAttendance}</p><p className="text-xl font-black">{stats.nIn} <span className="text-[10px] text-slate-500 font-bold">/ {stats.nTotal}</span></p></div>
                         <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5"><p className="text-[10px] font-black text-emerald-500 uppercase mb-1 flex items-center gap-1"><Icon name="restaurant" size={10}/> {t.mealGiven}</p><p className="text-xl font-black">{stats.mealClaimed} <span className="text-[10px] text-slate-500 font-bold">/ {stats.total}</span></p></div>
                         <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5"><p className="text-[10px] font-black text-purple-500 uppercase mb-1 flex items-center gap-1"><Icon name="redeem" size={10}/> {t.giftGiven}</p><p className="text-xl font-black">{stats.giftClaimed} <span className="text-[10px] text-slate-500 font-bold">/ {stats.total}</span></p></div>
                     </div>
+
                     {!scanRes && (
                         <div className="flex bg-slate-800 p-1 rounded-xl mb-4 shadow-inner">
                             <button onClick={() => setScanMode('checkin')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'checkin' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>入場報到</button>
@@ -508,6 +520,7 @@
                             <button onClick={() => setScanMode('souvenir')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'souvenir' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400'}`}>{t.giftClaim}</button>
                         </div>
                     )}
+
                     {!scanRes ? (
                         <div className="flex flex-col items-center flex-1 justify-center">
                             <div className={`border-4 shadow-[0_0_20px_rgba(0,0,0,0.5)] rounded-[32px] overflow-hidden mb-4 ${scanMode === 'checkin' ? 'border-blue-500' : scanMode === 'meal' ? 'border-emerald-500' : 'border-purple-500'}`}>
@@ -541,11 +554,19 @@
             );
         }
 
-        // --- 管理者中心 ---
+        // --- 管理者中心 (恢復完整統計，移除證書功能) ---
         function AdminPanel({ dbData, setView, loadData, isSyncing, t }) {
             const checkedInCount = useMemo(() => {
                 return dbData.LIST?.filter(a => a['報到時間']).length || 0;
             }, [dbData.LIST]);
+            
+            // 計算 VIP 與一般報到、餐點與紀念品數量
+            const vipAttendees = dbData.LIST?.filter(checkIsVIP) || [];
+            const normalAttendees = dbData.LIST?.filter(a => !checkIsVIP(a)) || [];
+            const vipCheckedIn = vipAttendees.filter(a => a['報到時間']).length;
+            const normalCheckedIn = normalAttendees.filter(a => a['報到時間']).length;
+            const mealClaimed = dbData.LIST?.filter(a => a['領餐時間']).length || 0;
+            const giftClaimed = dbData.LIST?.filter(a => a['紀念品領取時間']).length || 0;
 
             return (
                 <div className="p-6 space-y-6 h-full overflow-y-auto no-print text-left bg-slate-50">
@@ -561,6 +582,38 @@
                         </div>
                         <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-400">
                             <Icon name="groups" size={24} />
+                        </div>
+                    </div>
+
+                    {/* 詳細統計區塊 */}
+                    <div className="space-y-4 mb-4">
+                        <div className="bg-white p-5 rounded-[32px] shadow-sm border border-amber-100 flex items-center justify-between">
+                            <div className="text-left">
+                                <p className="text-[10px] font-black text-amber-600 uppercase mb-1 flex items-center gap-1 text-left"><Icon name="star" size={10} className="text-amber-600"/> {t.vipAttendance}</p>
+                                <p className="text-3xl font-black text-amber-700 tracking-tighter text-left">
+                                    {vipCheckedIn} <span className="text-sm font-bold text-slate-300">/ {vipAttendees.length}</span>
+                                </p>
+                            </div>
+                            <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 shadow-inner"><Icon name="workspace_premium" size={24} /></div>
+                        </div>
+                        <div className="bg-white p-5 rounded-[32px] shadow-sm border border-blue-100 flex items-center justify-between">
+                            <div className="text-left">
+                                <p className="text-[10px] font-black text-blue-600 uppercase mb-1 flex items-center gap-1 text-left"><Icon name="group" size={10} className="text-blue-600"/> {t.normalAttendance}</p>
+                                <p className="text-3xl font-black text-blue-700 tracking-tighter text-left">
+                                    {normalCheckedIn} <span className="text-sm font-bold text-slate-300">/ {normalAttendees.length}</span>
+                                </p>
+                            </div>
+                            <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-400"><Icon name="group" size={24} /></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-white p-5 rounded-[32px] shadow-sm border border-slate-100 text-left">
+                                <p className="text-[10px] font-black text-slate-400 uppercase mb-1 text-left">{t.mealGiven}</p>
+                                <p className="text-2xl font-black text-orange-600 text-left">{mealClaimed}</p>
+                            </div>
+                            <div className="bg-white p-5 rounded-[32px] shadow-sm border border-slate-100 text-left">
+                                <p className="text-[10px] font-black text-slate-400 uppercase mb-1 text-left">{t.giftGiven}</p>
+                                <p className="text-2xl font-black text-blue-600 text-left">{giftClaimed}</p>
+                            </div>
                         </div>
                     </div>
 
