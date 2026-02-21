@@ -6,8 +6,8 @@
     <title>新動力公關 - 活動管理系統</title>
     
     <!-- 基礎套件載入 -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -15,18 +15,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
     
     <!-- QR Code 掃描器 -->
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    
-    <!-- Firebase (Compat 版本) -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
         body { 
             font-family: 'Noto Sans TC', sans-serif;
             background-color: #f8fafc;
+            margin: 0;
         }
         
         @keyframes scan { 0% { top: 0%; } 100% { top: 100%; } }
@@ -54,46 +50,23 @@
             .label-company { font-size: 9pt; font-weight: bold; color: #555; }
         }
         @media screen { .print-only { display: none; } }
-        #reader { border: none !important; border-radius: 1.5rem; overflow: hidden; }
-        #reader__scan_region { background: white; }
+        #reader { border: none !important; border-radius: 1.5rem; overflow: hidden; background: white; }
     </style>
 </head>
 <body class="text-slate-900">
     <div id="root">
-        <div style="height: 100vh; display: flex; align-items: center; justify-content: center; font-family: sans-serif;">
-            正在載入系統... 如果持續顯示此畫面，請確認您的網路連線。
+        <div style="height: 100vh; display: flex; align-items: center; justify-content: center; font-family: sans-serif; color: #64748b;">
+            載入系統中，請稍候...
         </div>
     </div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo } = React;
+        const { useState, useEffect, useRef, useMemo } = window.React;
 
-        // --- 防呆處理：安全解析 Firebase 配置 ---
-        let firebaseConfig = { apiKey: "", authDomain: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: "" };
-        try {
-            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-                firebaseConfig = JSON.parse(__firebase_config);
-            }
-        } catch (e) { 
-            console.warn("環境變數解析失敗，將使用空設定"); 
-        }
-
-        let db = null;
-        let auth = null;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'impr-event-pwa-production';
-
-        // 只有在 apiKey 存在時才初始化 Firebase，避免直接白屏當機
-        if (firebaseConfig.apiKey) {
-            if (!firebase.apps.length) { 
-                firebase.initializeApp(firebaseConfig); 
-            }
-            db = firebase.firestore();
-            auth = firebase.auth();
-        }
-
-        const SHEET_ID = "1oZNmnM9ofMbYY9vcATltOg0IORcBSX2H5Txk9M9_7so";
-        const ATTENDEE_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
-        const GOOGLE_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`;
+        // =========================================================================
+        // 您的 Google Apps Script API
+        // =========================================================================
+        const API_URL = "https://script.google.com/macros/s/AKfycbwALn6OxDxqEP3LEmUB5oUuYnXHA-VxHhCLMHwhz5rzGP1p4RUrmi5HoWjF0S8kPf8m/exec";
 
         // --- 穩定圖示組件 (Material Symbols) ---
         const Icon = ({ name, size = 24, className = "" }) => {
@@ -117,92 +90,50 @@
 
         const checkIsVIP = (data) => {
             if (!data) return false;
-            const level = String(data.LEVEL || data.level || data['等級'] || '').trim().toUpperCase();
+            const level = String(data.LEVEL || data.Level || data['等級'] || '').trim().toUpperCase();
             return level === 'VIP';
         };
 
-        const parseCSV = (text) => {
-            const rows = []; let currentRow = []; let currentCell = ''; let insideQuote = false;
-            for (let i = 0; i < text.length; i++) {
-                const char = text[i]; const nextChar = text[i + 1];
-                if (char === '"') { if (insideQuote && nextChar === '"') { currentCell += '"'; i++; } else { insideQuote = !insideQuote; } }
-                else if (char === ',' && !insideQuote) { currentRow.push(currentCell.trim()); currentCell = ''; }
-                else if ((char === '\n' || char === '\r') && !insideQuote) {
-                    if (currentCell || currentRow.length > 0) { currentRow.push(currentCell.trim()); rows.push(currentRow); }
-                    currentRow = []; currentCell = ''; if (char === '\r' && nextChar === '\n') i++;
-                } else { currentCell += char; }
-            }
-            if (currentCell || currentRow.length > 0) { currentRow.push(currentCell.trim()); rows.push(currentRow); }
-            return rows;
-        };
-
+        // --- 主程式 App ---
         function App() {
+            const [dbData, setDbData] = useState({ LIST: [], WORKER: [] });
             const [user, setUser] = useState(null);
             const [view, setView] = useState('lookup');
-            const [attendees, setAttendees] = useState([]);
-            const [workers, setWorkers] = useState([]);
-            const [claims, setClaims] = useState([]);
             const [loading, setLoading] = useState(true);
-            const [message, setMessage] = useState({ text: '', type: '' });
-            const [refreshing, setRefreshing] = useState(false);
+            const [isSyncing, setIsSyncing] = useState(false);
 
-            useEffect(() => {
-                if (!auth) {
-                    setLoading(false);
-                    setMessage({ text: '系統缺少 Firebase 金鑰設定！請確認 index.html 中的 firebaseConfig。', type: 'error' });
-                    return;
-                }
-
-                const initAuth = async () => {
-                    try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await auth.signInWithCustomToken(__initial_auth_token);
-                        } else { 
-                            await auth.signInAnonymously(); 
+            // 1. 初次載入資料
+            const loadData = () => {
+                setIsSyncing(true);
+                fetch(API_URL)
+                    .then(res => res.json())
+                    .then(data => {
+                        setDbData(data);
+                        // 如果有登入的使用者，同步更新他的最新狀態
+                        if (user) {
+                            const updatedUser = data.LIST?.find(a => String(a.ID) === String(user.ID));
+                            if (updatedUser) setUser(updatedUser);
                         }
-                    } catch (e) { 
-                        console.error("Auth Fail", e); 
-                    }
-                };
-                
-                const unsubAuth = auth.onAuthStateChanged((u) => { 
-                    setUser(u); 
-                    setLoading(false); 
-                });
-                
-                initAuth();
-                return () => unsubAuth();
-            }, []);
+                        setLoading(false);
+                        setIsSyncing(false);
+                    })
+                    .catch(err => {
+                        console.error("API 載入失敗:", err);
+                        alert("資料載入失敗，請確認網路連線或 Apps Script 狀態。");
+                        setLoading(false);
+                        setIsSyncing(false);
+                    });
+            };
 
             useEffect(() => {
-                if (!user || !db) return;
-                
-                const dataRef = db.collection('artifacts').doc(appId).collection('public').doc('data');
-                
-                const unsubA = dataRef.collection('attendees').onSnapshot((s) => {
-                    setAttendees(s.docs.map((d) => ({id: d.id, ...d.data()})));
-                }, (e) => console.error("Attendees Error:", e));
-                
-                const unsubW = dataRef.collection('workers').onSnapshot((s) => {
-                    setWorkers(s.docs.map((d) => ({id: d.id, ...d.data()})));
-                }, (e) => console.error("Workers Error:", e));
-                
-                const unsubC = dataRef.collection('claims').onSnapshot((s) => {
-                    setClaims(s.docs.map((d) => ({id: d.id, ...d.data()})));
-                }, (e) => console.error("Claims Error:", e));
-                
-                return () => { 
-                    if(unsubA) unsubA(); 
-                    if(unsubW) unsubW(); 
-                    if(unsubC) unsubC(); 
-                };
-            }, [user]);
+                loadData();
+            }, []);
 
             const handleLookup = (input) => {
                 const term = input.trim().toLowerCase();
                 if (!term) return;
                 
-                const match = attendees.find((a) => {
+                const match = dbData.LIST?.find((a) => {
                     const email = String(a.Email || a.email || a['電子郵件'] || '').toLowerCase();
                     const phone = String(a.Phone || a.phone || a['電話'] || '').replace(/[-\s]/g, '');
                     const id = String(a.ID || a.id || a['編號'] || '').toLowerCase();
@@ -213,22 +144,20 @@
                     setUser(match); 
                     setView('user-dashboard');
                 } else if (term === 'joseph@impr.com.tw') {
-                    setUser({ id: 'JOSEPH', Name: 'Joseph Huang', Company: 'IMPR', Title: 'GM', LEVEL: 'VIP' });
+                    setUser({ ID: 'JOSEPH', Name: 'Joseph Huang', Company: 'IMPR', Title: 'GM', Level: 'VIP' });
                     setView('user-dashboard');
                 } else {
-                    setMessage({ text: '抱歉，系統找不到您的資料。\n請確認輸入是否正確。', type: 'error' });
+                    alert('抱歉，系統找不到您的資料。請確認輸入是否正確。');
                 }
-            };
-
-            const triggerRefresh = () => {
-                setRefreshing(true);
-                setTimeout(() => setRefreshing(false), 1000);
             };
 
             if (loading) {
                 return (
-                    <div className="h-screen flex items-center justify-center bg-white">
-                        <BrandLogo className="w-48 animate-pulse" />
+                    <div className="h-screen flex flex-col items-center justify-center bg-white">
+                        <BrandLogo className="w-48 mb-4 animate-pulse" />
+                        <div className="flex items-center gap-2 text-slate-400 font-bold text-sm">
+                            <Icon name="sync" className="animate-spin" /> 連線至資料庫...
+                        </div>
                     </div>
                 );
             }
@@ -236,26 +165,14 @@
             return (
                 <div className="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative flex flex-col overflow-hidden text-left">
                     {view === 'lookup' && <Lookup onLogin={handleLookup} setView={setView} BrandLogo={BrandLogo} />}
-                    {view === 'staff-login' && <StaffLogin workers={workers} setView={setView} setCurrentUserData={setUser} BrandLogo={BrandLogo} />}
-                    {view === 'user-dashboard' && <UserDashboard data={user} claims={claims} setView={setView} BrandLogo={BrandLogo} />}
-                    {view === 'staff-tool' && <StaffTool user={user} attendees={attendees} claims={claims} setView={setView} BrandLogo={BrandLogo} db={db} appId={appId} triggerRefresh={triggerRefresh} refreshing={refreshing} />}
-                    {view === 'admin-panel' && <AdminPanel attendees={attendees} workers={workers} claims={claims} setView={setView} setMessage={setMessage} db={db} appId={appId} parseCSV={parseCSV} ATTENDEE_CSV_URL={ATTENDEE_CSV_URL} GOOGLE_SHEET_URL={GOOGLE_SHEET_URL} />}
-                    
-                    {message.text && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm no-print">
-                            <div className="bg-white rounded-[32px] w-full max-w-xs p-8 shadow-2xl text-center scale-in-center">
-                                <div className={`w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center ${message.type === 'error' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
-                                    <Icon name={message.type === 'error' ? "cancel" : "info"} size={32} />
-                                </div>
-                                <p className="font-bold text-slate-800 mb-6 whitespace-pre-wrap leading-relaxed">{message.text}</p>
-                                <button onClick={() => setMessage({text: '', type: ''})} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold uppercase">確定</button>
-                            </div>
-                        </div>
-                    )}
+                    {view === 'staff-login' && <StaffLogin workers={dbData.WORKER || []} setView={setView} setCurrentUserData={setUser} BrandLogo={BrandLogo} />}
+                    {view === 'user-dashboard' && <UserDashboard data={user} setView={setView} BrandLogo={BrandLogo} loadData={loadData} isSyncing={isSyncing} />}
+                    {view === 'staff-tool' && <StaffTool user={user} dbData={dbData} setView={setView} BrandLogo={BrandLogo} loadData={loadData} isSyncing={isSyncing} API_URL={API_URL} />}
                 </div>
             );
         }
 
+        // --- 子組件：一般查詢 ---
         function Lookup({ onLogin, setView, BrandLogo }) {
             const [val, setVal] = useState('');
             return (
@@ -279,6 +196,7 @@
             );
         }
 
+        // --- 子組件：工作人員登入 ---
         function StaffLogin({ workers, setView, setCurrentUserData, BrandLogo }) {
             const [acc, setAcc] = useState('');
             const [pw, setPw] = useState('');
@@ -287,9 +205,9 @@
                 const term = acc.trim();
                 const found = workers.find((w) => (String(w['帳號'] || w['Account'] || '') === term) && (String(w['密碼'] || w['Passwd'] || '') === pw.trim()));
                 if (found || (term === 'admin' && pw === 'admin123')) {
-                    const staff = found || { Name: '系統管理員', LEVEL: 'admin' };
+                    const staff = found || { Name: '系統管理員', LEVEL: 'admin', ['姓名']: '管理員' };
                     setCurrentUserData(staff);
-                    setView(String(staff.LEVEL || staff.level || '').toLowerCase() === 'admin' ? 'admin-panel' : 'staff-tool');
+                    setView('staff-tool'); // 直接進入掃描工具
                 } else { 
                     alert("驗證失敗：帳號或密碼不正確。"); 
                 }
@@ -301,19 +219,24 @@
                     <h2 className="text-lg font-black mb-8 text-slate-700 border-b-4 border-orange-500 pb-1 uppercase">後台管理登入</h2>
                     <input type="text" placeholder="帳號 Account" className="w-full p-4 mb-4 bg-white rounded-2xl border outline-none shadow-sm text-center" value={acc} onChange={(e) => setAcc(e.target.value)} />
                     <input type="password" placeholder="密碼 Password" className="w-full p-4 mb-6 bg-white rounded-2xl border outline-none shadow-sm text-center" value={pw} onChange={(e) => setPw(e.target.value)} />
-                    <button onClick={login} className="w-full bg-slate-900 text-white p-4 rounded-2xl font-black shadow-lg active:scale-95">登入 Login</button>
+                    <button onClick={login} className="w-full bg-slate-900 text-white p-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all">登入 Login</button>
                     <button onClick={() => setView('lookup')} className="mt-8 text-slate-400 text-xs font-bold underline">返回首頁</button>
                 </div>
             );
         }
 
-        function UserDashboard({ data, claims, setView, BrandLogo }) {
+        // --- 子組件：與會者儀表板 (專注於列印與狀態) ---
+        function UserDashboard({ data, setView, BrandLogo, loadData, isSyncing }) {
             const isVIP = checkIsVIP(data);
-            const isC = (type) => claims.some((c) => c.attendeeId === (data.id || data.ID) && c.item === type);
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(data.id || data.ID || '')}`;
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(data.ID || data.id || '')}`;
+
+            // 判斷領取狀態 (依據 Google Sheet 回傳的欄位)
+            const mealClaimed = !!(data['領餐時間'] || data.mealClaimed);
+            const giftClaimed = !!(data['紀念品領取時間'] || data.giftClaimed);
 
             return (
                 <div className="flex flex-col h-full bg-slate-50 overflow-hidden text-left">
+                    {/* --- 列印區塊 --- */}
                     <div className="print-only">
                         <div className="label-container text-center">
                             <div className="label-header">{isVIP ? "VIP 貴賓" : "與會嘉賓"}</div>
@@ -323,11 +246,19 @@
                         </div>
                     </div>
                     
+                    {/* --- 顯示區塊 --- */}
                     <div className="no-print h-full flex flex-col">
-                        <div className={`${isVIP ? 'bg-gradient-to-br from-amber-500 to-orange-600' : 'bg-blue-800'} p-6 text-white pb-12 shadow-xl shrink-0`}>
+                        <div className={`${isVIP ? 'bg-gradient-to-br from-amber-500 to-orange-600' : 'bg-blue-800'} p-6 text-white pb-10 shadow-xl shrink-0`}>
                             <div className="flex justify-between items-center mb-6">
                                 <BrandLogo invert className="w-28" />
-                                <button onClick={() => setView('lookup')} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-all"><Icon name="logout" size={18}/></button>
+                                <div className="flex gap-2">
+                                    <button onClick={loadData} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-all flex items-center">
+                                        <Icon name="sync" size={18} className={isSyncing ? "animate-spin" : ""} />
+                                    </button>
+                                    <button onClick={() => setView('lookup')} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-all">
+                                        <Icon name="logout" size={18}/>
+                                    </button>
+                                </div>
                             </div>
                             <div className="flex items-center gap-5">
                                 <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center text-slate-800 shadow-2xl shrink-0">
@@ -341,7 +272,7 @@
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6 pt-8 z-10 -mt-6 bg-slate-50 rounded-t-[32px]">
+                        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6 pt-6 z-10">
                             <div className="bg-white p-6 rounded-[32px] flex flex-col items-center shadow-xl border border-slate-100 text-center">
                                 <div className="p-3 bg-slate-50 rounded-3xl mb-6 border border-slate-100">
                                     <img src={qrUrl} className="w-48 h-48" alt="QR" />
@@ -353,18 +284,18 @@
                             </div>
                             
                             <div className="grid grid-cols-2 gap-4 text-center">
-                                <div className={`p-4 rounded-3xl border text-center shadow-sm ${isC('meal') ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}>
-                                    <Icon name="restaurant" className={`mx-auto mb-2 ${isC('meal') ? 'text-green-500' : 'text-slate-300'}`} size={28} />
-                                    <p className={`text-[10px] font-black ${isC('meal') ? 'text-green-700' : 'text-slate-400'}`}>{isC('meal') ? '餐點已領取' : '餐點未領取'}</p>
+                                <div className={`p-4 rounded-3xl border text-center shadow-sm ${mealClaimed ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}>
+                                    <Icon name="restaurant" className={`mx-auto mb-2 ${mealClaimed ? 'text-green-500' : 'text-slate-300'}`} size={28} />
+                                    <p className={`text-[10px] font-black ${mealClaimed ? 'text-green-700' : 'text-slate-400'}`}>{mealClaimed ? '餐點已領取' : '餐點未領取'}</p>
                                 </div>
-                                <div className={`p-4 rounded-3xl border text-center shadow-sm ${isC('gift') ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}>
-                                    <Icon name="redeem" className={`mx-auto mb-2 ${isC('gift') ? 'text-green-500' : 'text-slate-300'}`} size={28} />
-                                    <p className={`text-[10px] font-black ${isC('gift') ? 'text-green-700' : 'text-slate-400'}`}>{isC('gift') ? '贈品已領取' : '贈品未領取'}</p>
+                                <div className={`p-4 rounded-3xl border text-center shadow-sm ${giftClaimed ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}>
+                                    <Icon name="redeem" className={`mx-auto mb-2 ${giftClaimed ? 'text-green-500' : 'text-slate-300'}`} size={28} />
+                                    <p className={`text-[10px] font-black ${giftClaimed ? 'text-green-700' : 'text-slate-400'}`}>{giftClaimed ? '贈品已領取' : '贈品未領取'}</p>
                                 </div>
                             </div>
                             
                             <div className="grid grid-cols-1 gap-3 pb-4">
-                                {Object.entries(data).filter(([k]) => !['id','uid','Passwd','LEVEL','level','Email','type','姓名','公司','職稱','等級','信箱'].includes(k)).map(([key, val]) => (
+                                {Object.entries(data).filter(([k]) => !['id','uid','Passwd','LEVEL','level','Email','type','姓名','公司','職稱','等級','信箱','領餐時間','紀念品領取時間','報到時間'].includes(k)).map(([key, val]) => (
                                     <div key={key} className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col gap-1 shadow-sm text-left">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{key}</p>
                                         <p className="text-sm font-bold text-slate-700">{String(val) || "---"}</p>
@@ -377,59 +308,83 @@
             );
         }
 
-        function StaffTool({ user, attendees, claims, setView, db, appId, triggerRefresh, refreshing }) {
+        // --- 子組件：工作人員核銷工具 ---
+        function StaffTool({ user, dbData, setView, loadData, isSyncing, API_URL }) {
             const [scanRes, setScanRes] = useState(null);
+            const [scanMode, setScanMode] = useState('checkin'); // checkin, meal, souvenir
+            const [manualId, setManualId] = useState('');
             const scannerRef = useRef(null);
 
+            // 統計數據
             const stats = useMemo(() => {
-                const checkedInIds = new Set(claims.filter((c) => c.item === 'checkin').map((c) => c.attendeeId));
                 let vIn = 0, nIn = 0, vTotal = 0, nTotal = 0;
-                let mealClaimed = claims.filter((c) => c.item === 'meal').length;
-                let giftClaimed = claims.filter((c) => c.item === 'gift').length;
+                let mealClaimed = 0, giftClaimed = 0;
 
-                attendees.forEach((a) => {
+                dbData.LIST?.forEach((a) => {
                     const isVIP = checkIsVIP(a);
-                    if (isVIP) { vTotal++; if (checkedInIds.has(a.id || a.ID)) vIn++; }
-                    else { nTotal++; if (checkedInIds.has(a.id || a.ID)) nIn++; }
+                    if (isVIP) { vTotal++; if (a['報到時間']) vIn++; }
+                    else { nTotal++; if (a['報到時間']) nIn++; }
+                    
+                    if (a['領餐時間']) mealClaimed++;
+                    if (a['紀念品領取時間']) giftClaimed++;
                 });
 
-                return { vIn, vTotal, nIn, nTotal, mealClaimed, giftClaimed, total: attendees.length };
-            }, [attendees, claims]);
+                return { vIn, vTotal, nIn, nTotal, mealClaimed, giftClaimed, total: dbData.LIST?.length || 0 };
+            }, [dbData.LIST]);
+
+            const processCheckIn = (idText) => {
+                const found = dbData.LIST?.find(a => String(a.ID) === idText || String(a.id) === idText);
+                
+                if (found) {
+                    setScanRes({ ...found, status: 'found' });
+                    
+                    // 向 Apps Script 發送寫入請求
+                    fetch(API_URL, { 
+                        method: 'POST', 
+                        body: JSON.stringify({ id: idText, action: scanMode }) 
+                    })
+                    .then(res => res.json())
+                    .then(result => {
+                        if(result.status === "success") {
+                            setScanRes({ ...found, status: 'success', msg: result.message });
+                            loadData(); // 重新讀取資料庫更新畫面
+                        } else if (result.status === "warning") {
+                            setScanRes({ ...found, status: 'warning', msg: result.message });
+                        } else {
+                            setScanRes({ ...found, status: 'error', msg: '寫入失敗' });
+                        }
+                    }).catch(() => {
+                        setScanRes({ ...found, status: 'error', msg: '網路連線異常' });
+                    });
+                } else {
+                    setScanRes({ Name: "未知代碼", ID: idText, status: 'not_found', msg: '查無此人' });
+                }
+            };
 
             useEffect(() => {
-                if (!scanRes && window.Html5QrcodeScanner) {
-                    const scanner = new window.Html5QrcodeScanner("reader", { fps: 15, qrbox: 250 });
-                    scanner.render((txt) => {
-                        const m = attendees.find((a) => String(a.id || a.ID) === txt || String(a.Email || a.email || '').toLowerCase() === txt.toLowerCase());
-                        if (m) { 
-                            setScanRes(m); 
-                            try { scanner.clear(); } catch(e) {}
-                        }
-                    }, () => {});
-                    scannerRef.current = scanner;
-                    return () => { 
-                        if (scannerRef.current) {
-                            try { scannerRef.current.clear(); } catch(e) {}
-                        }
-                    };
+                let html5QrCode;
+                if (!scanRes && document.getElementById("reader")) {
+                    html5QrCode = new window.Html5Qrcode("reader");
+                    html5QrCode.start(
+                        { facingMode: "environment" },
+                        { fps: 10, qrbox: { width: 250, height: 250 } },
+                        (decodedText) => {
+                            if (html5QrCode.isScanning) {
+                                html5QrCode.stop().then(() => {
+                                    processCheckIn(decodedText);
+                                }).catch(err => console.error(err));
+                            }
+                        },
+                        () => {}
+                    ).catch(err => console.error("相機啟動失敗", err));
+                    scannerRef.current = html5QrCode;
                 }
-            }, [scanRes, attendees]);
-
-            const claim = async (type) => {
-                if(!db) return alert("資料庫未連線");
-                const id = scanRes.id || scanRes.ID;
-                await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('claims').doc(`${type}_${id}`).set({
-                    attendeeId: id, item: type, timestamp: new Date().toISOString(), staff: user.Name || user['姓名'] || 'Staff'
-                });
-                
-                if (type !== 'checkin' && !claims.some((c) => c.attendeeId === id && c.item === 'checkin')) {
-                    await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('claims').doc(`checkin_${id}`).set({
-                        attendeeId: id, item: 'checkin', timestamp: new Date().toISOString(), staff: user.Name || user['姓名'] || 'Staff'
-                    });
-                }
-                alert("核銷完成！");
-                setScanRes(null);
-            };
+                return () => { 
+                    if (scannerRef.current && scannerRef.current.isScanning) {
+                        scannerRef.current.stop().catch(e => {}); 
+                    }
+                };
+            }, [scanRes, scanMode]);
 
             return (
                 <div className="flex flex-col h-full bg-slate-900 text-white p-4 no-print text-center">
@@ -439,11 +394,11 @@
                             <span>{user?.['姓名'] || user?.Name || '工作人員'}</span>
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={triggerRefresh} className="flex items-center gap-1 bg-white/10 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-white/20 transition-all">
-                                <Icon name="refresh" size={14} className={refreshing ? "animate-spin" : ""} />
+                            <button onClick={loadData} className="flex items-center gap-1 bg-white/10 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-white/20 transition-all">
+                                <Icon name="sync" size={14} className={isSyncing ? "animate-spin" : ""} />
                                 更新
                             </button>
-                            <button onClick={() => setView('lookup')} className="bg-white/10 px-3 py-1.5 rounded-xl text-xs font-bold">結束</button>
+                            <button onClick={() => setView('lookup')} className="bg-white/10 px-3 py-1.5 rounded-xl text-xs font-bold">登出</button>
                         </div>
                     </div>
 
@@ -466,105 +421,51 @@
                         </div>
                     </div>
 
+                    {!scanRes && (
+                        <div className="flex bg-slate-800 p-1 rounded-xl mb-4 shadow-inner">
+                            <button onClick={() => setScanMode('checkin')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'checkin' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>入場報到</button>
+                            <button onClick={() => setScanMode('meal')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'meal' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400'}`}>發放餐點</button>
+                            <button onClick={() => setScanMode('souvenir')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'souvenir' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400'}`}>發放紀念品</button>
+                        </div>
+                    )}
+
                     {!scanRes ? (
                         <div className="flex flex-col items-center flex-1 justify-center">
-                            <div id="reader" className="w-full bg-black rounded-[40px] aspect-square relative border-2 border-white/5 shadow-2xl overflow-hidden">
-                                <div className="scan-line"></div>
+                            <div className={`border-4 shadow-[0_0_20px_rgba(0,0,0,0.5)] rounded-[32px] overflow-hidden mb-4 ${scanMode === 'checkin' ? 'border-blue-500' : scanMode === 'meal' ? 'border-emerald-500' : 'border-purple-500'}`}>
+                                <div id="reader" className="w-full max-w-[300px] aspect-square relative bg-white"></div>
                             </div>
-                            <p className="mt-8 text-xs text-slate-500 animate-pulse font-black tracking-[0.3em] uppercase">Ready to Scan</p>
+                            
+                            <div className="flex gap-2 w-full max-w-[300px]">
+                                <input type="text" placeholder="手動輸入序號 ID" className="flex-1 bg-slate-800 border border-slate-700 text-white p-3 rounded-xl outline-none focus:border-orange-500 text-sm" value={manualId} onChange={e => setManualId(e.target.value)} onKeyPress={e => { if(e.key === 'Enter' && manualId.trim()) processCheckIn(manualId.trim()); }} />
+                                <button onClick={() => { if(manualId.trim()) processCheckIn(manualId.trim()); }} className="bg-orange-600 hover:bg-orange-500 text-white px-5 rounded-xl font-bold text-sm transition shadow-lg">送出</button>
+                            </div>
                         </div>
                     ) : (
-                        <div className="bg-white p-8 rounded-[48px] text-slate-900 animate-in zoom-in duration-300 shadow-2xl text-left">
-                            <div className="inline-block px-3 py-1 rounded-full text-[10px] font-black mb-4 uppercase bg-orange-100 text-orange-600">{scanRes.LEVEL || scanRes['等級'] || 'GUEST'}</div>
-                            <h3 className="text-3xl font-black mb-1">{scanRes.Name || scanRes['姓名']}</h3>
-                            <p className="text-xs font-bold text-slate-400 mb-8 border-b pb-4">{scanRes.Company || scanRes['公司']}</p>
-                            <div className="space-y-4">
-                                <button onClick={() => claim('meal')} className="w-full py-5 bg-orange-600 text-white rounded-3xl font-black shadow-lg uppercase">確認領取餐點</button>
-                                <button onClick={() => claim('gift')} className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black shadow-lg uppercase">確認領取紀念品</button>
-                                <button onClick={() => setScanRes(null)} className="w-full py-3 text-slate-300 text-xs font-bold uppercase text-center tracking-widest block mx-auto">取消並重掃</button>
+                        <div className="bg-slate-800 p-8 rounded-[48px] shadow-2xl text-left border border-slate-700 mt-4 text-center">
+                            <div className="mb-4">
+                                {isSyncing ? <Icon name="sync" className="animate-spin text-slate-400" size={40} /> : 
+                                 scanRes.status === 'success' ? <Icon name="check_circle" className="text-green-400" size={40} /> : 
+                                 scanRes.status === 'warning' ? <Icon name="warning" className="text-yellow-400" size={40} /> : 
+                                 <Icon name="cancel" className="text-red-400" size={40} />}
                             </div>
+                            <h3 className="text-2xl font-black mb-1 text-white">{scanRes.Name || scanRes['姓名']}</h3>
+                            <p className="text-xs font-bold text-slate-400 mb-6">{scanRes.Company || scanRes['公司']}</p>
+                            
+                            <div className="mb-8 text-sm font-bold h-8 flex items-center justify-center">
+                                {isSyncing && <span className="text-slate-400">寫入資料庫中...</span>}
+                                {scanRes.status === 'success' && <span className="text-green-400">{scanRes.msg}</span>}
+                                {scanRes.status === 'warning' && <span className="text-yellow-400">{scanRes.msg}</span>}
+                                {(scanRes.status === 'error' || scanRes.status === 'not_found') && <span className="text-red-400">{scanRes.msg}</span>}
+                            </div>
+                            
+                            <button onClick={() => {setScanRes(null); setManualId('');}} disabled={isSyncing} className={`w-full py-4 rounded-2xl font-bold uppercase tracking-widest ${isSyncing ? 'bg-slate-700 text-slate-500' : 'bg-orange-600 text-white'}`}>繼續掃描</button>
                         </div>
                     )}
                 </div>
             );
         }
 
-        function AdminPanel({ attendees, workers, claims, setView, setMessage, db, appId, parseCSV, ATTENDEE_CSV_URL, GOOGLE_SHEET_URL }) {
-            const [syncing, setSyncing] = useState(false);
-            const [syncUrl, setSyncUrl] = useState('');
-            const checkedInCount = useMemo(() => (new Set(claims.map((c) => c.attendeeId))).size, [claims]);
-
-            const syncData = async (target, url) => {
-                if(!db) return setMessage({ text: '資料庫未連線，請檢查 Firebase 設定。', type: 'error' });
-                if (!url) return setMessage({ text: '請輸入正確的分頁網址', type: 'error' });
-                setSyncing(true);
-                try {
-                    const csvUrl = url.includes('/edit') ? url.replace('/edit', '/export?format=csv') : url;
-                    const res = await fetch(csvUrl); 
-                    const text = await res.text(); 
-                    const rows = parseCSV(text);
-                    const head = rows[0]; 
-                    const dataRows = rows.slice(1);
-                    const batch = db.batch();
-                    
-                    dataRows.forEach((r) => {
-                        if (r.length < 2) return;
-                        const obj = {}; 
-                        head.forEach((h, i) => {
-                            let key = h.trim();
-                            if (key === '姓名') key = 'Name';
-                            if (key === '公司') key = 'Company';
-                            if (key === '職稱') key = 'Title';
-                            if (key === '等級') key = 'LEVEL';
-                            obj[key] = (r[i] || "").trim();
-                        });
-                        const rawId = obj.ID || obj.id || obj.Email || obj.email || "";
-                        const docId = rawId.toLowerCase().trim() || `ID_${Math.random().toString(36).slice(2, 7)}`;
-                        batch.set(db.collection('artifacts').doc(appId).collection('public').doc('data').collection(target).doc(docId), obj);
-                    });
-                    await batch.commit();
-                    setMessage({ text: `✅ ${target} 同步成功！\n成功寫入 ${dataRows.length} 筆資料。`, type: 'success' });
-                } catch (e) { 
-                    setMessage({ text: '❌ 同步失敗。', type: 'error' }); 
-                } finally { 
-                    setSyncing(false); 
-                }
-            };
-
-            return (
-                <div className="p-6 space-y-6 h-full overflow-y-auto no-print text-left bg-slate-50">
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Management Panel</h2>
-                        <button onClick={() => setView('lookup')}><Icon name="logout" size={16} /></button>
-                    </div>
-
-                    <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm text-center">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">與會者報到率</p>
-                        <p className="text-5xl font-black tracking-tighter text-slate-800">{checkedInCount} <span className="text-xl font-bold opacity-20">/ {attendees.length}</span></p>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 uppercase">工作人員數</p>
-                        <p className="text-xl font-black text-slate-800">{workers.length}</p>
-                    </div>
-
-                    <div className="space-y-4 pt-4 text-center">
-                        <button onClick={() => syncData('attendees', ATTENDEE_CSV_URL)} disabled={syncing} className="w-full p-4 bg-orange-50 text-orange-600 rounded-2xl font-black border border-orange-200 flex items-center justify-center gap-2 active:scale-95">
-                            <Icon name={syncing ? "sync" : "cloud_download"} size={18} className={syncing ? "animate-spin" : ""} />
-                            {syncing ? '同步中...' : '同步與會者名單 (gid=0)'}
-                        </button>
-                        <div className="bg-white p-5 rounded-3xl border border-slate-100 space-y-3 text-left">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">分頁資料同步 (Worker)</p>
-                            <input type="text" placeholder="貼上分頁完整網址" className="w-full p-3 bg-slate-50 border rounded-xl text-xs outline-none focus:ring-1 focus:ring-slate-300" value={syncUrl} onChange={(e) => setSyncUrl(e.target.value)} />
-                            <button onClick={() => syncData('workers', syncUrl)} disabled={syncing} className="w-full py-3 bg-slate-800 text-white rounded-xl text-xs font-bold active:scale-95">同步工作人員名單</button>
-                        </div>
-                        <button onClick={() => window.open(GOOGLE_SHEET_URL, '_blank')} className="w-full p-5 bg-[#f37021] text-white rounded-[32px] font-black flex items-center justify-center gap-3 shadow-xl active:scale-95"><Icon name="bar_chart" size={20} /> 開啟雲端試算表</button>
-                    </div>
-                </div>
-            );
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
+        const root = window.ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
