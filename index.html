@@ -36,6 +36,12 @@
             z-index: 10;
         }
 
+        /* --- 掃描器 UI 優化 --- */
+        #reader { border: none !important; border-radius: 1.5rem; overflow: hidden; background: white; padding: 10px; }
+        #reader a { display: none !important; } /* 隱藏底部的 powered by 連結 */
+        #reader button { padding: 8px 16px; border-radius: 12px; background: #f37021; color: white; border: none; font-weight: bold; margin: 4px; cursor: pointer; }
+        #reader select { padding: 8px; border-radius: 8px; margin-bottom: 10px; width: 100%; border: 1px solid #e2e8f0; font-family: inherit; }
+
         /* --- 列印專用設定 (60x40mm 標籤) --- */
         @media print {
             body, html { margin: 0; padding: 0; background: white !important; }
@@ -53,7 +59,6 @@
             .label-company { font-size: 9pt; font-weight: bold; color: #555; }
         }
         @media screen { .print-only { display: none; } }
-        #reader { border: none !important; border-radius: 1.5rem; overflow: hidden; background: white; }
     </style>
 </head>
 <body class="text-slate-900">
@@ -102,7 +107,7 @@
                 role: "身分：",
                 confirmMeal: "確認發放餐點",
                 confirmGift: "確認發放紀念品",
-                cancelRescan: "取消並重掃",
+                cancelRescan: "繼續作業",
                 adminCenter: "管理系統中心",
                 logout: "登出",
                 attendanceStats: "現場出席統計",
@@ -148,7 +153,7 @@
                 role: "Role: ",
                 confirmMeal: "Confirm Meal",
                 confirmGift: "Confirm Gift",
-                cancelRescan: "Cancel & Rescan",
+                cancelRescan: "Continue",
                 adminCenter: "Admin Center",
                 logout: "Logout",
                 attendanceStats: "Attendance Stats",
@@ -420,16 +425,18 @@
             );
         }
 
-        // --- 子組件：工作人員核銷工具 (修正相機閃退問題) ---
+        // --- 子組件：工作人員核銷工具 (徹底修復相機白畫面) ---
         function StaffTool({ user, dbData, setView, loadData, isSyncing, t }) {
             const [scanRes, setScanRes] = useState(null);
             const [scanMode, setScanMode] = useState('checkin');
             const [manualId, setManualId] = useState('');
             const scannerRef = useRef(null);
             
-            // 使用 useRef 儲存最新的掃描模式，避免相機因為依賴變更而一直重新掛載
+            // 使用 useRef 保存最新的掃描模式與資料，讓處理函數可以拿到最新值，
+            // 這樣就不需要把 scanMode 放入 useEffect 的依賴中，相機就不會被強制關閉重開
             const scanModeRef = useRef(scanMode);
             const dbDataRef = useRef(dbData);
+            const isProcessingRef = useRef(false); // 防止重複掃描的鎖
             
             useEffect(() => { scanModeRef.current = scanMode; }, [scanMode]);
             useEffect(() => { dbDataRef.current = dbData; }, [dbData]);
@@ -449,6 +456,7 @@
             const processCheckIn = (idText) => {
                 const currentMode = scanModeRef.current;
                 const found = dbDataRef.current.LIST?.find(a => String(a.ID) === idText || String(a.id) === idText);
+                
                 if (found) {
                     setScanRes({ ...found, status: 'found' });
                     fetch(API_URL, { method: 'POST', body: JSON.stringify({ id: idText, action: currentMode }) })
@@ -458,43 +466,50 @@
                         else if (result.status === "warning") { setScanRes({ ...found, status: 'warning', msg: result.message }); } 
                         else { setScanRes({ ...found, status: 'error', msg: '寫入失敗' }); }
                     }).catch(() => { setScanRes({ ...found, status: 'error', msg: '網路連線異常' }); });
-                } else { setScanRes({ Name: "未知代碼", ID: idText, status: 'not_found', msg: '查無此人' }); }
+                } else { 
+                    setScanRes({ Name: "未知代碼", ID: idText, status: 'not_found', msg: '查無此人' }); 
+                }
             };
 
-            // 最穩定的相機初始化寫法
+            // ⚠️ 關鍵修正：只在組件「第一次載入」時掛載相機，之後永遠不解除掛載
             useEffect(() => {
                 let html5QrCode;
-                
-                if (!scanRes) {
-                    const timer = setTimeout(() => {
-                        if (document.getElementById("reader")) {
-                            html5QrCode = new window.Html5Qrcode("reader");
-                            html5QrCode.start(
-                                { facingMode: "environment" },
-                                { fps: 10, qrbox: { width: 250, height: 250 } },
-                                (decodedText) => {
-                                    // 掃描到後，立刻停止相機並處理結果
-                                    if (html5QrCode.isScanning) {
-                                        html5QrCode.stop().then(() => {
-                                            processCheckIn(decodedText);
-                                        }).catch(err => console.log("Stop error", err));
+                const initScanner = () => {
+                    if (document.getElementById("reader") && !scannerRef.current) {
+                        html5QrCode = new window.Html5QrcodeScanner(
+                            "reader", 
+                            { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 }, 
+                            false
+                        );
+                        html5QrCode.render(
+                            (decodedText) => { 
+                                // 如果目前沒有在處理結果，才進行處理 (避免連續掃描)
+                                if (!isProcessingRef.current) {
+                                    isProcessingRef.current = true;
+                                    // 嘗試暫停相機畫面 (如果套件支援)
+                                    if (html5QrCode.pause) {
+                                        try { html5QrCode.pause(true); } catch(e) {}
                                     }
-                                },
-                                (err) => { /* 忽略頻繁的解析錯誤 */ }
-                            ).catch(err => console.log("Camera Start Error:", err));
-                            
-                            scannerRef.current = html5QrCode;
-                        }
-                    }, 100); // 確保 DOM 渲染完畢
-                    
-                    return () => {
-                        clearTimeout(timer);
-                        if (scannerRef.current && scannerRef.current.isScanning) {
-                            scannerRef.current.stop().catch(err => console.log("Cleanup error", err));
-                        }
-                    };
-                }
-            }, [scanRes]); // 只在 scanRes (掃描結果) 改變時才重新執行相機
+                                    processCheckIn(decodedText); 
+                                }
+                            }, 
+                            (err) => { /* 忽略正常的找尋失敗 */ }
+                        );
+                        scannerRef.current = html5QrCode;
+                    }
+                };
+
+                // 給一點緩衝時間讓 React 渲染完 DOM
+                const timer = setTimeout(initScanner, 100);
+
+                return () => { 
+                    clearTimeout(timer);
+                    if (scannerRef.current) { 
+                        scannerRef.current.clear().catch(e => console.error(e)); 
+                        scannerRef.current = null;
+                    } 
+                };
+            }, []); // 空陣列：確保相機初始化只執行一次！
 
             return (
                 <div className="flex flex-col h-full bg-slate-900 text-white p-4 no-print text-center">
@@ -506,55 +521,88 @@
                         </div>
                     </div>
                     
-                    <div className="bg-slate-800/50 rounded-3xl p-4 mb-4 grid grid-cols-2 gap-3 text-left border border-white/5 shadow-2xl">
+                    <div className="bg-slate-800/50 rounded-3xl p-4 mb-4 grid grid-cols-2 gap-3 text-left border border-white/5 shadow-2xl shrink-0">
                         <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5"><p className="text-[10px] font-black text-amber-500 uppercase mb-1 flex items-center gap-1"><Icon name="star" size={10}/> {t.vipAttendance}</p><p className="text-xl font-black">{stats.vIn} <span className="text-[10px] text-slate-500 font-bold">/ {stats.vTotal}</span></p></div>
                         <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5"><p className="text-[10px] font-black text-blue-500 uppercase mb-1 flex items-center gap-1"><Icon name="group" size={10}/> {t.normalAttendance}</p><p className="text-xl font-black">{stats.nIn} <span className="text-[10px] text-slate-500 font-bold">/ {stats.nTotal}</span></p></div>
                         <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5"><p className="text-[10px] font-black text-emerald-500 uppercase mb-1 flex items-center gap-1"><Icon name="restaurant" size={10}/> {t.mealGiven}</p><p className="text-xl font-black">{stats.mealClaimed} <span className="text-[10px] text-slate-500 font-bold">/ {stats.total}</span></p></div>
                         <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5"><p className="text-[10px] font-black text-purple-500 uppercase mb-1 flex items-center gap-1"><Icon name="redeem" size={10}/> {t.giftGiven}</p><p className="text-xl font-black">{stats.giftClaimed} <span className="text-[10px] text-slate-500 font-bold">/ {stats.total}</span></p></div>
                     </div>
 
-                    {!scanRes && (
-                        <div className="flex bg-slate-800 p-1 rounded-xl mb-4 shadow-inner">
-                            <button onClick={() => setScanMode('checkin')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'checkin' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>入場報到</button>
-                            <button onClick={() => setScanMode('meal')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'meal' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400'}`}>{t.mealClaim}</button>
-                            <button onClick={() => setScanMode('souvenir')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'souvenir' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400'}`}>{t.giftClaim}</button>
-                        </div>
-                    )}
+                    {/* 模式切換按鈕 */}
+                    <div className="flex bg-slate-800 p-1 rounded-xl mb-4 shadow-inner shrink-0 relative z-10">
+                        <button onClick={() => setScanMode('checkin')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'checkin' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>入場報到</button>
+                        <button onClick={() => setScanMode('meal')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'meal' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400'}`}>{t.mealClaim}</button>
+                        <button onClick={() => setScanMode('souvenir')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'souvenir' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400'}`}>{t.giftClaim}</button>
+                    </div>
 
-                    {!scanRes ? (
-                        <div className="flex flex-col items-center flex-1 justify-center">
-                            <div className={`border-4 shadow-[0_0_20px_rgba(0,0,0,0.5)] rounded-[32px] overflow-hidden mb-4 ${scanMode === 'checkin' ? 'border-blue-500' : scanMode === 'meal' ? 'border-emerald-500' : 'border-purple-500'}`}>
-                                <div id="reader" className="w-full max-w-[300px] aspect-square relative bg-white"></div>
-                            </div>
+                    {/* 相機與覆蓋層容器 */}
+                    <div className="flex-1 flex flex-col items-center justify-center relative w-full pb-4">
+                        
+                        {/* 始終存在的相機 DOM，不論 scanRes 是什麼，它都不會被消滅 */}
+                        <div className={`w-full max-w-[300px] bg-white rounded-[32px] overflow-hidden mb-4 border-4 ${scanMode === 'checkin' ? 'border-blue-500' : scanMode === 'meal' ? 'border-emerald-500' : 'border-purple-500'}`}>
+                            <div id="reader" className="w-full min-h-[250px] bg-white text-slate-800"></div>
+                        </div>
+
+                        {/* 手動輸入區塊 (當沒有結果時顯示) */}
+                        {!scanRes && (
                             <div className="flex gap-2 w-full max-w-[300px]">
-                                <input type="text" placeholder="手動輸入序號 ID" className="flex-1 bg-slate-800 border border-slate-700 text-white p-3 rounded-xl outline-none focus:border-orange-500 text-sm" value={manualId} onChange={e => setManualId(e.target.value)} onKeyPress={e => { if(e.key === 'Enter' && manualId.trim()) processCheckIn(manualId.trim()); }} />
-                                <button onClick={() => { if(manualId.trim()) processCheckIn(manualId.trim()); }} className="bg-orange-600 hover:bg-orange-500 text-white px-5 rounded-xl font-bold text-sm transition shadow-lg">送出</button>
+                                <input type="text" placeholder="手動輸入序號 ID" className="flex-1 bg-slate-800 border border-slate-700 text-white p-3 rounded-xl outline-none focus:border-orange-500 text-sm" value={manualId} onChange={e => setManualId(e.target.value)} onKeyPress={e => { 
+                                    if(e.key === 'Enter' && manualId.trim()) {
+                                        isProcessingRef.current = true;
+                                        if (scannerRef.current?.pause) try { scannerRef.current.pause(true); } catch(e){}
+                                        processCheckIn(manualId.trim());
+                                    } 
+                                }} />
+                                <button onClick={() => { 
+                                    if(manualId.trim()) {
+                                        isProcessingRef.current = true;
+                                        if (scannerRef.current?.pause) try { scannerRef.current.pause(true); } catch(e){}
+                                        processCheckIn(manualId.trim());
+                                    } 
+                                }} className="bg-orange-600 hover:bg-orange-500 text-white px-5 rounded-xl font-bold text-sm transition shadow-lg">送出</button>
                             </div>
-                        </div>
-                    ) : (
-                        <div className="bg-slate-800 p-8 rounded-[48px] shadow-2xl text-left border border-slate-700 mt-4 text-center">
-                            <div className="mb-4 flex justify-center">
-                                {scanRes.status === 'found' ? <Icon name="sync" className="animate-spin text-slate-400" size={40} /> : 
-                                 scanRes.status === 'success' ? <Icon name="check_circle" className="text-green-400" size={40} /> : 
-                                 scanRes.status === 'warning' ? <Icon name="warning" className="text-yellow-400" size={40} /> : 
-                                 <Icon name="cancel" className="text-red-400" size={40} />}
+                        )}
+
+                        {/* 掃描結果彈出層 (Overlay) - 直接覆蓋在相機上方，相機不必關閉 */}
+                        {scanRes && (
+                            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-900/90 backdrop-blur-sm rounded-[32px] p-6">
+                                <div className="bg-white p-8 rounded-[40px] shadow-2xl text-center w-full max-w-sm animate-in zoom-in duration-200">
+                                    <div className="mb-4 flex justify-center">
+                                        {scanRes.status === 'found' ? <Icon name="sync" className="animate-spin text-slate-400" size={48} /> : 
+                                         scanRes.status === 'success' ? <Icon name="check_circle" className="text-green-500" size={48} /> : 
+                                         scanRes.status === 'warning' ? <Icon name="warning" className="text-yellow-500" size={48} /> : 
+                                         <Icon name="cancel" className="text-red-500" size={48} />}
+                                    </div>
+                                    <h3 className="text-2xl font-black mb-1 text-slate-900">{scanRes.Name || scanRes['姓名']}</h3>
+                                    <p className="text-xs font-bold text-slate-500 mb-6">{scanRes.Company || scanRes['公司']}</p>
+                                    
+                                    <div className="mb-8 text-sm font-bold h-8 flex items-center justify-center">
+                                        {scanRes.status === 'found' && <span className="text-slate-400">寫入資料庫中...</span>}
+                                        {scanRes.status === 'success' && <span className="text-green-600">{scanRes.msg}</span>}
+                                        {scanRes.status === 'warning' && <span className="text-yellow-600">{scanRes.msg}</span>}
+                                        {(scanRes.status === 'error' || scanRes.status === 'not_found') && <span className="text-red-600">{scanRes.msg}</span>}
+                                    </div>
+                                    
+                                    <button onClick={() => {
+                                        setScanRes(null); 
+                                        setManualId('');
+                                        isProcessingRef.current = false; // 解除鎖定
+                                        // 嘗試恢復相機畫面
+                                        if (scannerRef.current?.resume) {
+                                            try { scannerRef.current.resume(); } catch(e){}
+                                        }
+                                    }} disabled={scanRes.status === 'found'} className={`w-full py-4 rounded-2xl font-bold uppercase tracking-widest ${scanRes.status === 'found' ? 'bg-slate-200 text-slate-400' : 'bg-orange-600 text-white hover:bg-orange-500 active:scale-95 transition-all shadow-lg'}`}>
+                                        {t.cancelRescan}
+                                    </button>
+                                </div>
                             </div>
-                            <h3 className="text-2xl font-black mb-1 text-white">{scanRes.Name || scanRes['姓名']}</h3>
-                            <p className="text-xs font-bold text-slate-400 mb-6">{scanRes.Company || scanRes['公司']}</p>
-                            <div className="mb-8 text-sm font-bold h-8 flex items-center justify-center">
-                                {scanRes.status === 'found' && <span className="text-slate-400">寫入試算表中...</span>}
-                                {scanRes.status === 'success' && <span className="text-green-400">{scanRes.msg}</span>}
-                                {scanRes.status === 'warning' && <span className="text-yellow-400">{scanRes.msg}</span>}
-                                {(scanRes.status === 'error' || scanRes.status === 'not_found') && <span className="text-red-400">{scanRes.msg}</span>}
-                            </div>
-                            <button onClick={() => {setScanRes(null); setManualId('');}} disabled={scanRes.status === 'found'} className={`w-full py-4 rounded-2xl font-bold uppercase tracking-widest ${scanRes.status === 'found' ? 'bg-slate-700 text-slate-500' : 'bg-orange-600 text-white hover:bg-orange-500'}`}>繼續作業</button>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             );
         }
 
-        // --- 管理者中心 (恢復完整統計，移除證書功能) ---
+        // --- 管理者中心 ---
         function AdminPanel({ dbData, setView, loadData, isSyncing, t }) {
             const checkedInCount = useMemo(() => {
                 return dbData.LIST?.filter(a => a['報到時間']).length || 0;
