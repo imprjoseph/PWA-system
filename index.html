@@ -107,7 +107,7 @@
                 logout: "登出",
                 attendanceStats: "現場出席統計",
                 syncList: "同步與會者名單",
-                refresh: "更新名單",
+                refresh: "更新資料",
                 vipAttendance: "VIP 貴賓出席",
                 normalAttendance: "一般與會者",
                 mealGiven: "餐點發放",
@@ -263,7 +263,7 @@
 
             return (
                 <div className="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative flex flex-col overflow-hidden text-left">
-                    {view === 'lookup' && <Lookup onLogin={handleLookup} setView={setView} BrandLogo={BrandLogo} lang={lang} setLang={setLang} t={t} loadData={loadData} isSyncing={isSyncing} />}
+                    {view === 'lookup' && <Lookup onLogin={handleLookup} setView={setView} BrandLogo={BrandLogo} lang={lang} setLang={setLang} t={t} />}
                     {view === 'staff-login' && <StaffLogin workers={dbData.WORKER || []} setView={setView} setCurrentUserData={setUser} BrandLogo={BrandLogo} t={t} />}
                     {view === 'user-dashboard' && <UserDashboard data={user} setView={setView} BrandLogo={BrandLogo} loadData={loadData} isSyncing={isSyncing} lang={lang} setLang={setLang} t={t} />}
                     {view === 'staff-tool' && <StaffTool user={user} dbData={dbData} setView={setView} loadData={loadData} isSyncing={isSyncing} t={t} />}
@@ -273,18 +273,11 @@
         }
 
         // --- 子組件：一般查詢 ---
-        function Lookup({ onLogin, setView, BrandLogo, lang, setLang, t, loadData, isSyncing }) {
+        function Lookup({ onLogin, setView, BrandLogo, lang, setLang, t }) {
             const [val, setVal] = useState('');
             return (
                 <div className="p-10 flex flex-1 flex-col items-center justify-center text-center relative no-print">
                     <div className="absolute top-6 right-6 flex items-center gap-2">
-                        <button 
-                            onClick={loadData}
-                            disabled={isSyncing}
-                            className="flex items-center gap-1 text-slate-400 font-bold text-sm bg-slate-50 px-3 py-1.5 rounded-full hover:text-orange-500 transition-colors disabled:opacity-50"
-                        >
-                            <Icon name="sync" size={16} className={isSyncing ? "animate-spin" : ""} /> {t.refresh}
-                        </button>
                         <button 
                             onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
                             className="flex items-center gap-1 text-slate-400 font-bold text-sm bg-slate-50 px-3 py-1.5 rounded-full hover:text-orange-500 transition-colors"
@@ -498,7 +491,7 @@
                     <div className="flex justify-between items-center mb-4 mt-2 text-left">
                         <div className="flex items-center gap-2 text-orange-400 text-sm font-bold uppercase"><Icon name="how_to_reg" size={20} /><span>{user?.['姓名'] || user?.Name || '工作人員'}</span></div>
                         <div className="flex gap-2">
-                            <button onClick={loadData} className="flex items-center gap-1 bg-white/10 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-white/20 transition-all"><Icon name="sync" size={14} className={isSyncing ? "animate-spin" : ""} />更新</button>
+                            <button onClick={loadData} className="flex items-center gap-1 bg-white/10 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-white/20 transition-all"><Icon name="sync" size={14} className={isSyncing ? "animate-spin" : ""} />{t.refresh}</button>
                             <button onClick={() => setView('lookup')} className="bg-white/10 px-3 py-1.5 rounded-xl text-xs font-bold">{t.logout}</button>
                         </div>
                     </div>
