@@ -6,12 +6,12 @@
     <title>新動力公關 - 活動管理系統</title>
     
     <!-- 基礎套件載入 -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 替換為 Google Material Icons -->
+    <!-- 替換為 Google Material Icons (最穩定，絕不會造成 JS 白屏報錯) -->
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
     
     <!-- QR Code 掃描器 -->
@@ -66,28 +66,30 @@
     </div>
 
     <script type="text/babel">
-        // 確保 React 變數存在
-        const { useState, useEffect, useRef, useMemo } = window.React;
+        const { useState, useEffect, useRef, useMemo } = React;
 
-        // --- Firebase 配置 ---
+        // --- 防呆處理：安全解析 Firebase 配置 ---
         let firebaseConfig = { apiKey: "", authDomain: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: "" };
-        
         try {
-            if (typeof window.__firebase_config !== 'undefined' && window.__firebase_config !== "") {
-                firebaseConfig = JSON.parse(window.__firebase_config);
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                firebaseConfig = JSON.parse(__firebase_config);
             }
         } catch (e) { 
-            console.error("Firebase Config Error:", e); 
+            console.warn("環境變數解析失敗，將使用空設定"); 
         }
 
-        // 初始化 Firebase (確保不會重複初始化)
-        if (!window.firebase.apps.length && firebaseConfig.apiKey !== "") { 
-            window.firebase.initializeApp(firebaseConfig); 
+        let db = null;
+        let auth = null;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'impr-event-pwa-production';
+
+        // 只有在 apiKey 存在時才初始化 Firebase，避免直接白屏當機
+        if (firebaseConfig.apiKey) {
+            if (!firebase.apps.length) { 
+                firebase.initializeApp(firebaseConfig); 
+            }
+            db = firebase.firestore();
+            auth = firebase.auth();
         }
-        
-        const db = window.firebase.firestore();
-        const auth = window.firebase.auth();
-        const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'impr-event-pwa-production';
 
         const SHEET_ID = "1oZNmnM9ofMbYY9vcATltOg0IORcBSX2H5Txk9M9_7so";
         const ATTENDEE_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
@@ -145,10 +147,16 @@
             const [refreshing, setRefreshing] = useState(false);
 
             useEffect(() => {
+                if (!auth) {
+                    setLoading(false);
+                    setMessage({ text: '系統缺少 Firebase 金鑰設定！請確認 index.html 中的 firebaseConfig。', type: 'error' });
+                    return;
+                }
+
                 const initAuth = async () => {
                     try {
-                        if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
-                            await auth.signInWithCustomToken(window.__initial_auth_token);
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await auth.signInWithCustomToken(__initial_auth_token);
                         } else { 
                             await auth.signInAnonymously(); 
                         }
@@ -156,16 +164,18 @@
                         console.error("Auth Fail", e); 
                     }
                 };
+                
                 const unsubAuth = auth.onAuthStateChanged((u) => { 
                     setUser(u); 
                     setLoading(false); 
                 });
+                
                 initAuth();
                 return () => unsubAuth();
             }, []);
 
             useEffect(() => {
-                if (!user || firebaseConfig.apiKey === "") return;
+                if (!user || !db) return;
                 
                 const dataRef = db.collection('artifacts').doc(appId).collection('public').doc('data');
                 
@@ -406,6 +416,7 @@
             }, [scanRes, attendees]);
 
             const claim = async (type) => {
+                if(!db) return alert("資料庫未連線");
                 const id = scanRes.id || scanRes.ID;
                 await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('claims').doc(`${type}_${id}`).set({
                     attendeeId: id, item: type, timestamp: new Date().toISOString(), staff: user.Name || user['姓名'] || 'Staff'
@@ -484,6 +495,7 @@
             const checkedInCount = useMemo(() => (new Set(claims.map((c) => c.attendeeId))).size, [claims]);
 
             const syncData = async (target, url) => {
+                if(!db) return setMessage({ text: '資料庫未連線，請檢查 Firebase 設定。', type: 'error' });
                 if (!url) return setMessage({ text: '請輸入正確的分頁網址', type: 'error' });
                 setSyncing(true);
                 try {
@@ -552,7 +564,7 @@
             );
         }
 
-        const root = window.ReactDOM.createRoot(document.getElementById('root'));
+        const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
