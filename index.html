@@ -32,6 +32,7 @@
             position: absolute; width: 100%; height: 2px;
             background: #f37021; box-shadow: 0 0 10px #f37021;
             animation: scan 2s linear infinite;
+            z-index: 10;
         }
 
         /* ========================================== */
@@ -54,6 +55,7 @@
         }
         @media screen { .print-only { display: none; } }
         #reader { border: none !important; border-radius: 1.5rem; overflow: hidden; }
+        #reader__scan_region { background: white; }
     </style>
 </head>
 <body class="text-slate-900">
@@ -95,7 +97,7 @@
 
         const checkIsVIP = (data) => {
             if (!data) return false;
-            const level = String(data.LEVEL || data.Level || data['等級'] || '').trim().toUpperCase();
+            const level = String(data.LEVEL || data.level || data['等級'] || '').trim().toUpperCase();
             return level === 'VIP';
         };
 
@@ -122,6 +124,7 @@
             const [claims, setClaims] = useState([]);
             const [loading, setLoading] = useState(true);
             const [message, setMessage] = useState({ text: '', type: '' });
+            const [refreshing, setRefreshing] = useState(false);
 
             useEffect(() => {
                 const initAuth = async () => {
@@ -166,6 +169,11 @@
                 }
             };
 
+            const triggerRefresh = () => {
+                setRefreshing(true);
+                setTimeout(() => setRefreshing(false), 1000);
+            };
+
             if (loading) return <div className="h-screen flex items-center justify-center bg-white"><BrandLogo className="w-48 animate-pulse" /></div>;
 
             return (
@@ -173,7 +181,7 @@
                     {view === 'lookup' && <Lookup onLogin={handleLookup} setView={setView} BrandLogo={BrandLogo} />}
                     {view === 'staff-login' && <StaffLogin workers={workers} setView={setView} setCurrentUserData={setUser} BrandLogo={BrandLogo} />}
                     {view === 'user-dashboard' && <UserDashboard data={user} claims={claims} setView={setView} BrandLogo={BrandLogo} />}
-                    {view === 'staff-tool' && <StaffTool user={user} attendees={attendees} setView={setView} BrandLogo={BrandLogo} db={db} appId={appId} />}
+                    {view === 'staff-tool' && <StaffTool user={user} attendees={attendees} claims={claims} setView={setView} BrandLogo={BrandLogo} db={db} appId={appId} triggerRefresh={triggerRefresh} refreshing={refreshing} />}
                     {view === 'admin-panel' && <AdminPanel attendees={attendees} workers={workers} claims={claims} setView={setView} setMessage={setMessage} db={db} appId={appId} parseCSV={parseCSV} ATTENDEE_CSV_URL={ATTENDEE_CSV_URL} GOOGLE_SHEET_URL={GOOGLE_SHEET_URL} />}
                     
                     {message.text && (
@@ -212,7 +220,7 @@
                 const term = acc.trim();
                 const found = workers.find(w => (String(w['帳號'] || w['Account'] || '') === term) && (String(w['密碼'] || w['Passwd'] || '') === pw.trim()));
                 if (found || (term === 'admin' && pw === 'admin123')) {
-                    const staff = found || { Name: '系統管理員', LEVEL: 'admin' };
+                    const staff = found || { Name: '系統管理員', LEVEL: 'admin', ['姓名']: '管理員' };
                     setCurrentUserData(staff);
                     setView(String(staff.LEVEL || staff.level || '').toLowerCase() === 'admin' ? 'admin-panel' : 'staff-tool');
                 } else { alert("驗證失敗：帳號或密碼不正確。"); }
@@ -221,9 +229,9 @@
                 <div className="p-10 flex flex-1 flex-col items-center justify-center bg-slate-50 text-center">
                     <BrandLogo className="mb-10 w-full" />
                     <h2 className="text-lg font-black mb-8 text-slate-700 border-b-4 border-orange-500 pb-1 uppercase text-center">後台管理登入</h2>
-                    <input type="text" placeholder="帳號 Account" className="w-full p-4 mb-4 bg-white rounded-2xl border outline-none shadow-sm" value={acc} onChange={e => setAcc(e.target.value)} />
-                    <input type="password" placeholder="密碼 Password" className="w-full p-4 mb-6 bg-white rounded-2xl border outline-none shadow-sm" value={pw} onChange={e => setPw(e.target.value)} />
-                    <button onClick={login} className="w-full bg-slate-900 text-white p-4 rounded-2xl font-black shadow-lg">登入 Login</button>
+                    <input type="text" placeholder="帳號 Account" className="w-full p-4 mb-4 bg-white rounded-2xl border outline-none shadow-sm text-center" value={acc} onChange={e => setAcc(e.target.value)} />
+                    <input type="password" placeholder="密碼 Password" className="w-full p-4 mb-6 bg-white rounded-2xl border outline-none shadow-sm text-center" value={pw} onChange={e => setPw(e.target.value)} />
+                    <button onClick={login} className="w-full bg-slate-900 text-white p-4 rounded-2xl font-black shadow-lg active:scale-95">登入 Login</button>
                     <button onClick={() => setView('lookup')} className="mt-8 text-slate-400 text-xs font-bold underline">返回首頁</button>
                 </div>
             );
@@ -235,7 +243,7 @@
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(data.id || data.ID || '')}`;
 
             return (
-                <div className="flex flex-col h-full bg-slate-50 overflow-hidden text-left">
+                <div className="flex flex-col h-full bg-slate-50 overflow-hidden text-left text-left">
                     <div className="print-only">
                         <div className="label-container text-center">
                             <div className="label-header">{isVIP ? "VIP 貴賓" : "與會嘉賓"}</div>
@@ -260,10 +268,10 @@
 
                         <div className="flex-1 overflow-y-auto p-6 space-y-6 pt-10">
                             <div className="bg-white p-6 rounded-[40px] flex flex-col items-center shadow-sm border border-slate-100 text-center">
-                                <div className="p-3 bg-slate-50 rounded-3xl mb-4 border border-slate-100"><img src={qrUrl} className="w-44 h-44" alt="QR" /></div>
-                                <button onClick={() => window.print()} className="flex items-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-full text-xs font-black shadow-lg active:scale-95 transition-all"><Icon name="Printer" size={16}/> 列印實體標籤</button>
+                                <div className="p-3 bg-slate-50 rounded-3xl mb-4 border border-slate-100 text-center"><img src={qrUrl} className="w-44 h-44" alt="QR" /></div>
+                                <button onClick={() => window.print()} className="flex items-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-full text-xs font-black shadow-lg active:scale-95 transition-all text-center"><Icon name="Printer" size={16}/> 列印實體標籤</button>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 text-center">
+                            <div className="grid grid-cols-2 gap-4 text-center text-center">
                                 <div className={`p-4 rounded-3xl border text-center ${isC('meal') ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}><Icon name="Utensils" className={isC('meal') ? 'text-green-500' : 'text-slate-200'} /><p className={`text-[10px] mt-1 font-bold ${isC('meal') ? 'text-green-700' : 'text-slate-400'}`}>{isC('meal') ? '餐點已領取' : '餐點未領取'}</p></div>
                                 <div className={`p-4 rounded-3xl border text-center ${isC('gift') ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}><Icon name="Gift" className={isC('gift') ? 'text-green-500' : 'text-slate-200'} /><p className={`text-[10px] mt-1 font-bold ${isC('gift') ? 'text-green-700' : 'text-slate-400'}`}>{isC('gift') ? '贈品已領取' : '贈品未領取'}</p></div>
                             </div>
@@ -281,9 +289,27 @@
             );
         }
 
-        function StaffTool({ user, attendees, setView, db, appId }) {
+        // --- 工作人員工具組件 (增加更新資料按鈕與統計) ---
+        function StaffTool({ user, attendees, claims, setView, db, appId, triggerRefresh, refreshing }) {
             const [scanRes, setScanRes] = useState(null);
             const scannerRef = useRef(null);
+
+            // 計算統計數據
+            const stats = useMemo(() => {
+                const checkedInIds = new Set(claims.filter(c => c.item === 'checkin').map(c => c.attendeeId));
+                let vIn = 0, nIn = 0, vTotal = 0, nTotal = 0;
+                let mealClaimed = claims.filter(c => c.item === 'meal').length;
+                let giftClaimed = claims.filter(c => c.item === 'gift').length;
+
+                attendees.forEach(a => {
+                    const isVIP = checkIsVIP(a);
+                    if (isVIP) { vTotal++; if (checkedInIds.has(a.id || a.ID)) vIn++; }
+                    else { nTotal++; if (checkedInIds.has(a.id || a.ID)) nIn++; }
+                });
+
+                return { vIn, vTotal, nIn, nTotal, mealClaimed, giftClaimed, total: attendees.length };
+            }, [attendees, claims]);
+
             useEffect(() => {
                 if (!scanRes && window.Html5QrcodeScanner) {
                     const scanner = new Html5QrcodeScanner("reader", { fps: 15, qrbox: 250 });
@@ -295,22 +321,82 @@
                     return () => { if (scannerRef.current) scannerRef.current.clear().catch(() => {}); };
                 }
             }, [scanRes, attendees]);
+
             const claim = async (type) => {
                 const id = scanRes.id || scanRes.ID;
-                await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('claims').doc(`${type}_${id}`).set({ attendeeId: id, item: type, timestamp: new Date().toISOString(), staff: user.Name || user['姓名'] || 'Staff' });
-                alert("核銷成功！"); setScanRes(null);
+                await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('claims').doc(`${type}_${id}`).set({
+                    attendeeId: id, item: type, timestamp: new Date().toISOString(), staff: user.Name || user['姓名'] || 'Staff'
+                });
+                // 自動記錄入場報到 (若尚無紀錄)
+                if (type !== 'checkin' && !claims.some(c => c.attendeeId === id && c.item === 'checkin')) {
+                    await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('claims').doc(`checkin_${id}`).set({
+                        attendeeId: id, item: 'checkin', timestamp: new Date().toISOString(), staff: user.Name || user['姓名'] || 'Staff'
+                    });
+                }
+                alert("核銷完成！");
+                setScanRes(null);
             };
+
             return (
-                <div className="flex flex-col h-full bg-slate-900 text-white p-6 no-print text-center">
-                    <div className="flex justify-between mb-8"><div className="flex items-center gap-2 text-orange-400 text-xs font-bold uppercase text-left text-left"><Icon name="Camera" size={18} />QR 核銷系統</div><button onClick={() => setView('lookup')} className="text-xs font-bold opacity-40">結束作業</button></div>
-                    {!scanRes ? <div id="reader" className="w-full bg-black rounded-[40px] aspect-square relative border-2 border-white/5 shadow-2xl overflow-hidden"><div className="scan-line"></div></div> : (
-                        <div className="bg-white p-8 rounded-[48px] text-slate-900 animate-in zoom-in duration-300 shadow-2xl text-left"><div className="inline-block px-3 py-1 rounded-full text-[10px] font-black mb-4 uppercase bg-orange-100 text-orange-600">{scanRes.LEVEL || scanRes['等級'] || 'GUEST'}</div><h3 className="text-3xl font-black mb-1">{scanRes.Name || scanRes['姓名']}</h3><p className="text-xs font-bold text-slate-400 mb-8 border-b pb-4">{scanRes.Company || scanRes['公司']}</p><div className="space-y-4"><button onClick={() => claim('meal')} className="w-full py-5 bg-orange-600 text-white rounded-3xl font-black shadow-lg uppercase">發放餐點</button><button onClick={() => claim('gift')} className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black shadow-lg uppercase">發放紀念品</button><button onClick={() => setScanRes(null)} className="w-full py-3 text-slate-300 text-xs font-bold uppercase text-center tracking-widest">取消重掃</button></div></div>
+                <div className="flex flex-col h-full bg-slate-900 text-white p-4 no-print text-center">
+                    <div className="flex justify-between items-center mb-4 mt-2 text-left">
+                        <div className="flex items-center gap-2 text-orange-400 text-sm font-bold uppercase">
+                            <Icon name="UserCheck" size={20} />
+                            <span>{user?.['姓名'] || user?.Name || '工作人員'}</span>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={triggerRefresh} className="flex items-center gap-1 bg-white/10 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-white/20 transition-all">
+                                <Icon name="RefreshCw" size={14} className={refreshing ? "animate-spin" : ""} />
+                                更新
+                            </button>
+                            <button onClick={() => setView('lookup')} className="bg-white/10 px-3 py-1.5 rounded-xl text-xs font-bold">結束</button>
+                        </div>
+                    </div>
+
+                    {/* 即時數據欄 */}
+                    <div className="bg-slate-800/50 rounded-3xl p-4 mb-4 grid grid-cols-2 gap-3 text-left border border-white/5 shadow-2xl">
+                        <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5">
+                            <p className="text-[10px] font-black text-amber-500 uppercase mb-1 flex items-center gap-1"><Icon name="Star" size={10} className="fill-amber-500"/> VIP 報到</p>
+                            <p className="text-xl font-black">{stats.vIn} <span className="text-[10px] text-slate-500 font-bold">/ {stats.vTotal}</span></p>
+                        </div>
+                        <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5">
+                            <p className="text-[10px] font-black text-blue-500 uppercase mb-1 flex items-center gap-1"><Icon name="Users" size={10}/> 一般報到</p>
+                            <p className="text-xl font-black">{stats.nIn} <span className="text-[10px] text-slate-500 font-bold">/ {stats.nTotal}</span></p>
+                        </div>
+                        <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5">
+                            <p className="text-[10px] font-black text-emerald-500 uppercase mb-1 flex items-center gap-1"><Icon name="Utensils" size={10}/> 領餐</p>
+                            <p className="text-xl font-black">{stats.mealClaimed} <span className="text-[10px] text-slate-500 font-bold">/ {stats.total}</span></p>
+                        </div>
+                        <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5">
+                            <p className="text-[10px] font-black text-purple-500 uppercase mb-1 flex items-center gap-1"><Icon name="Gift" size={10}/> 領禮物</p>
+                            <p className="text-xl font-black">{stats.giftClaimed} <span className="text-[10px] text-slate-500 font-bold">/ {stats.total}</span></p>
+                        </div>
+                    </div>
+
+                    {!scanRes ? (
+                        <div className="flex flex-col items-center flex-1 justify-center">
+                            <div id="reader" className="w-full bg-black rounded-[40px] aspect-square relative border-2 border-white/5 shadow-2xl overflow-hidden text-center">
+                                <div className="scan-line text-center"></div>
+                            </div>
+                            <p className="mt-8 text-xs text-slate-500 animate-pulse font-black tracking-[0.3em] uppercase text-center text-center">Ready to Scan</p>
+                        </div>
+                    ) : (
+                        <div className="bg-white p-8 rounded-[48px] text-slate-900 animate-in zoom-in duration-300 shadow-2xl text-left text-left">
+                            <div className="inline-block px-3 py-1 rounded-full text-[10px] font-black mb-4 uppercase bg-orange-100 text-orange-600">{scanRes.LEVEL || scanRes['等級'] || 'GUEST'}</div>
+                            <h3 className="text-3xl font-black mb-1">{scanRes.Name || scanRes['姓名']}</h3>
+                            <p className="text-xs font-bold text-slate-400 mb-8 border-b pb-4">{scanRes.Company || scanRes['公司']}</p>
+                            <div className="space-y-4">
+                                <button onClick={() => claim('meal')} className="w-full py-5 bg-orange-600 text-white rounded-3xl font-black shadow-lg uppercase text-center">確認領取餐點</button>
+                                <button onClick={() => claim('gift')} className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black shadow-lg uppercase text-center">確認領取紀念品</button>
+                                <button onClick={() => setScanRes(null)} className="w-full py-3 text-slate-300 text-xs font-bold uppercase text-center tracking-widest text-center">取消並重掃</button>
+                            </div>
+                        </div>
                     )}
                 </div>
             );
         }
 
-        function AdminPanel({ attendees, workers, news, claims, setView, setMessage, db, appId, parseCSV, ATTENDEE_CSV_URL, GOOGLE_SHEET_URL }) {
+        function AdminPanel({ attendees, workers, claims, setView, setMessage, db, appId, parseCSV, ATTENDEE_CSV_URL, GOOGLE_SHEET_URL }) {
             const [syncing, setSyncing] = useState(false);
             const [syncUrl, setSyncUrl] = useState('');
             const checkedInCount = useMemo(() => (new Set(claims.map(c => c.attendeeId))).size, [claims]);
@@ -344,33 +430,33 @@
             };
 
             return (
-                <div className="p-6 space-y-6 h-full overflow-y-auto no-print text-left bg-slate-50">
+                <div className="p-6 space-y-6 h-full overflow-y-auto no-print text-left bg-slate-50 text-left">
                     <div className="flex justify-between items-center text-center">
-                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Management Panel</h2>
+                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400 text-left">Management Panel</h2>
                         <button onClick={() => setView('lookup')}><Icon name="LogOut" size={16} /></button>
                     </div>
 
-                    <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm text-center">
+                    <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm text-center text-center">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-center text-center">與會者報到率</p>
                         <p className="text-5xl font-black tracking-tighter text-slate-800 text-center">{checkedInCount} <span className="text-xl font-bold opacity-20">/ {attendees.length}</span></p>
                     </div>
 
-                    <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
+                    <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm text-left">
                         <p className="text-[10px] font-black text-slate-400 uppercase">工作人員數</p>
                         <p className="text-xl font-black text-slate-800">{workers.length}</p>
                     </div>
 
-                    <div className="space-y-4 pt-4 text-center text-left">
-                        <button onClick={() => syncData('attendees', ATTENDEE_CSV_URL)} disabled={syncing} className="w-full p-4 bg-orange-50 text-orange-600 rounded-2xl font-black border border-orange-200 flex items-center justify-center gap-2">
+                    <div className="space-y-4 pt-4 text-center text-left text-left">
+                        <button onClick={() => syncData('attendees', ATTENDEE_CSV_URL)} disabled={syncing} className="w-full p-4 bg-orange-50 text-orange-600 rounded-2xl font-black border border-orange-200 flex items-center justify-center gap-2 active:scale-95 text-center">
                             <Icon name={syncing ? "Loader2" : "DownloadCloud"} size={18} className={syncing ? "animate-spin" : ""} />
                             {syncing ? '同步中...' : '同步與會者名單 (gid=0)'}
                         </button>
-                        <div className="bg-white p-5 rounded-3xl border border-slate-100 space-y-3">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">分頁資料同步 (Worker)</p>
-                            <input type="text" placeholder="貼上分頁完整網址" className="w-full p-3 bg-slate-50 border rounded-xl text-xs outline-none" value={syncUrl} onChange={e => setSyncUrl(e.target.value)} />
-                            <button onClick={() => syncData('workers', syncUrl)} disabled={syncing} className="w-full py-3 bg-slate-800 text-white rounded-xl text-xs font-bold">同步工作人員名單</button>
+                        <div className="bg-white p-5 rounded-3xl border border-slate-100 space-y-3 text-left">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center text-center">分頁資料同步 (Worker)</p>
+                            <input type="text" placeholder="貼上分頁完整網址" className="w-full p-3 bg-slate-50 border rounded-xl text-xs outline-none focus:ring-1 focus:ring-slate-300" value={syncUrl} onChange={e => setSyncUrl(e.target.value)} />
+                            <button onClick={() => syncData('workers', syncUrl)} disabled={syncing} className="w-full py-3 bg-slate-800 text-white rounded-xl text-xs font-bold active:scale-95 text-center">同步工作人員名單</button>
                         </div>
-                        <button onClick={() => window.open(GOOGLE_SHEET_URL, '_blank')} className="w-full p-5 bg-[#f37021] text-white rounded-[32px] font-black flex items-center justify-center gap-3 active:scale-95 transition-all"><Icon name="BarChart3" size={20} /> 開啟雲端試算表</button>
+                        <button onClick={() => window.open(GOOGLE_SHEET_URL, '_blank')} className="w-full p-5 bg-[#f37021] text-white rounded-[32px] font-black flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all text-center"><Icon name="BarChart3" size={20} /> 開啟雲端試算表</button>
                     </div>
                 </div>
             );
