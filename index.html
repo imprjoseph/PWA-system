@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>新動力公關 - 活動管理系統</title>
     
-    <!-- 基礎套件載入 (加入 crossorigin 確保錯誤能正確顯示) -->
+    <!-- 基礎套件載入 -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 替換為 Google Material Icons (最穩定，絕不會造成 JS 白屏報錯) -->
+    <!-- 替換為 Google Material Icons -->
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
     
     <!-- QR Code 掃描器 -->
@@ -37,9 +37,7 @@
             z-index: 10;
         }
 
-        /* ========================================== */
-        /* 列印設定區 (60x40mm 標籤)                  */
-        /* ========================================== */
+        /* 列印設定區 (60x40mm 標籤) */
         @media print {
             body, html { margin: 0; padding: 0; background: white !important; }
             .no-print { display: none !important; }
@@ -61,37 +59,48 @@
     </style>
 </head>
 <body class="text-slate-900">
-    <div id="root"></div>
+    <div id="root">
+        <div style="height: 100vh; display: flex; align-items: center; justify-content: center; font-family: sans-serif;">
+            正在載入系統... 如果持續顯示此畫面，請確認您的網路連線。
+        </div>
+    </div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo } = React;
+        // 確保 React 變數存在
+        const { useState, useEffect, useRef, useMemo } = window.React;
 
-        // --- 安全的 Firebase 配置解析 (防止 JSON.parse 報錯導致白屏) ---
+        // --- Firebase 配置 ---
         let firebaseConfig = { apiKey: "", authDomain: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: "" };
+        
         try {
-            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-                firebaseConfig = JSON.parse(__firebase_config);
+            if (typeof window.__firebase_config !== 'undefined' && window.__firebase_config !== "") {
+                firebaseConfig = JSON.parse(window.__firebase_config);
             }
-        } catch (e) { console.warn("Firebase Config 解析失敗，使用預設空值"); }
+        } catch (e) { 
+            console.error("Firebase Config Error:", e); 
+        }
 
-        if (!firebase.apps.length && firebaseConfig.apiKey) { 
-            firebase.initializeApp(firebaseConfig); 
+        // 初始化 Firebase (確保不會重複初始化)
+        if (!window.firebase.apps.length && firebaseConfig.apiKey !== "") { 
+            window.firebase.initializeApp(firebaseConfig); 
         }
         
-        const db = firebase.firestore();
-        const auth = firebase.auth();
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'impr-event-pwa-production';
+        const db = window.firebase.firestore();
+        const auth = window.firebase.auth();
+        const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'impr-event-pwa-production';
 
         const SHEET_ID = "1oZNmnM9ofMbYY9vcATltOg0IORcBSX2H5Txk9M9_7so";
         const ATTENDEE_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
         const GOOGLE_SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`;
 
-        // --- 超穩定圖示組件 (Google Material Symbols) ---
-        const Icon = ({ name, size = 24, className = "" }) => (
-            <span className={`material-symbols-outlined align-middle ${className}`} style={{ fontSize: size, lineHeight: 1 }}>
-                {name}
-            </span>
-        );
+        // --- 穩定圖示組件 (Material Symbols) ---
+        const Icon = ({ name, size = 24, className = "" }) => {
+            return (
+                <span className={`material-symbols-outlined align-middle ${className}`} style={{ fontSize: size, lineHeight: 1 }}>
+                    {name}
+                </span>
+            );
+        };
 
         // --- 品牌 Logo ---
         const BrandLogo = ({ className = "w-full", invert = false }) => {
@@ -138,30 +147,52 @@
             useEffect(() => {
                 const initAuth = async () => {
                     try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await auth.signInWithCustomToken(__initial_auth_token);
-                        } else { await auth.signInAnonymously(); }
-                    } catch (e) { console.error("Auth Fail", e); }
+                        if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
+                            await auth.signInWithCustomToken(window.__initial_auth_token);
+                        } else { 
+                            await auth.signInAnonymously(); 
+                        }
+                    } catch (e) { 
+                        console.error("Auth Fail", e); 
+                    }
                 };
-                const unsubAuth = auth.onAuthStateChanged((u) => { setUser(u); setLoading(false); });
+                const unsubAuth = auth.onAuthStateChanged((u) => { 
+                    setUser(u); 
+                    setLoading(false); 
+                });
                 initAuth();
                 return () => unsubAuth();
             }, []);
 
             useEffect(() => {
-                if (!user || !firebaseConfig.apiKey) return;
+                if (!user || firebaseConfig.apiKey === "") return;
+                
                 const dataRef = db.collection('artifacts').doc(appId).collection('public').doc('data');
-                const unsubA = dataRef.collection('attendees').onSnapshot(s => setAttendees(s.docs.map(d => ({id: d.id, ...d.data()}))), e => console.error(e));
-                const unsubW = dataRef.collection('workers').onSnapshot(s => setWorkers(s.docs.map(d => ({id: d.id, ...d.data()}))));
-                const unsubC = dataRef.collection('claims').onSnapshot(s => setClaims(s.docs.map(d => ({id: d.id, ...d.data()}))));
-                return () => { unsubA(); unsubW(); unsubC(); };
+                
+                const unsubA = dataRef.collection('attendees').onSnapshot((s) => {
+                    setAttendees(s.docs.map((d) => ({id: d.id, ...d.data()})));
+                }, (e) => console.error("Attendees Error:", e));
+                
+                const unsubW = dataRef.collection('workers').onSnapshot((s) => {
+                    setWorkers(s.docs.map((d) => ({id: d.id, ...d.data()})));
+                }, (e) => console.error("Workers Error:", e));
+                
+                const unsubC = dataRef.collection('claims').onSnapshot((s) => {
+                    setClaims(s.docs.map((d) => ({id: d.id, ...d.data()})));
+                }, (e) => console.error("Claims Error:", e));
+                
+                return () => { 
+                    if(unsubA) unsubA(); 
+                    if(unsubW) unsubW(); 
+                    if(unsubC) unsubC(); 
+                };
             }, [user]);
 
             const handleLookup = (input) => {
                 const term = input.trim().toLowerCase();
                 if (!term) return;
                 
-                const match = attendees.find(a => {
+                const match = attendees.find((a) => {
                     const email = String(a.Email || a.email || a['電子郵件'] || '').toLowerCase();
                     const phone = String(a.Phone || a.phone || a['電話'] || '').replace(/[-\s]/g, '');
                     const id = String(a.ID || a.id || a['編號'] || '').toLowerCase();
@@ -169,7 +200,8 @@
                 });
 
                 if (match) {
-                    setUser(match); setView('user-dashboard');
+                    setUser(match); 
+                    setView('user-dashboard');
                 } else if (term === 'joseph@impr.com.tw') {
                     setUser({ id: 'JOSEPH', Name: 'Joseph Huang', Company: 'IMPR', Title: 'GM', LEVEL: 'VIP' });
                     setView('user-dashboard');
@@ -183,10 +215,16 @@
                 setTimeout(() => setRefreshing(false), 1000);
             };
 
-            if (loading) return <div className="h-screen flex items-center justify-center bg-white"><BrandLogo className="w-48 animate-pulse" /></div>;
+            if (loading) {
+                return (
+                    <div className="h-screen flex items-center justify-center bg-white">
+                        <BrandLogo className="w-48 animate-pulse" />
+                    </div>
+                );
+            }
 
             return (
-                <div className="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative flex flex-col overflow-hidden text-center text-left">
+                <div className="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative flex flex-col overflow-hidden text-left">
                     {view === 'lookup' && <Lookup onLogin={handleLookup} setView={setView} BrandLogo={BrandLogo} />}
                     {view === 'staff-login' && <StaffLogin workers={workers} setView={setView} setCurrentUserData={setUser} BrandLogo={BrandLogo} />}
                     {view === 'user-dashboard' && <UserDashboard data={user} claims={claims} setView={setView} BrandLogo={BrandLogo} />}
@@ -215,9 +253,18 @@
                     <BrandLogo className="mb-10 w-full" />
                     <h1 className="text-xl font-black mb-2 tracking-tight text-slate-800">活動報到查詢</h1>
                     <p className="text-slate-400 text-sm mb-10 leading-relaxed italic">請輸入報名 Email 或手機號碼</p>
-                    <input type="text" placeholder="Email / 手機號碼" className="w-full p-4 bg-slate-50 rounded-2xl border mb-4 text-center outline-none focus:ring-2 focus:ring-orange-500 font-bold" value={val} onChange={e => setVal(e.target.value)} onKeyPress={e => e.key === 'Enter' && onLogin(val)} />
+                    <input 
+                        type="text" 
+                        placeholder="Email / 手機號碼" 
+                        className="w-full p-4 bg-slate-50 rounded-2xl border mb-4 text-center outline-none focus:ring-2 focus:ring-orange-500 font-bold" 
+                        value={val} 
+                        onChange={(e) => setVal(e.target.value)} 
+                        onKeyPress={(e) => { if(e.key === 'Enter') onLogin(val); }} 
+                    />
                     <button onClick={() => onLogin(val)} className="w-full bg-[#f37021] text-white p-4 rounded-2xl font-black shadow-lg hover:bg-orange-600 transition-all">登入查詢</button>
-                    <button onClick={() => setView('staff-login')} className="mt-12 text-slate-300 text-xs font-bold hover:text-orange-500 flex items-center gap-1 justify-center"><Icon name="lock" size={14} /> 工作人員入口</button>
+                    <button onClick={() => setView('staff-login')} className="mt-12 text-slate-300 text-xs font-bold hover:text-orange-500 flex items-center gap-1 justify-center">
+                        <Icon name="lock" size={14} /> 工作人員入口
+                    </button>
                 </div>
             );
         }
@@ -225,31 +272,34 @@
         function StaffLogin({ workers, setView, setCurrentUserData, BrandLogo }) {
             const [acc, setAcc] = useState('');
             const [pw, setPw] = useState('');
+            
             const login = () => {
                 const term = acc.trim();
-                const found = workers.find(w => (String(w['帳號'] || w['Account'] || '') === term) && (String(w['密碼'] || w['Passwd'] || '') === pw.trim()));
+                const found = workers.find((w) => (String(w['帳號'] || w['Account'] || '') === term) && (String(w['密碼'] || w['Passwd'] || '') === pw.trim()));
                 if (found || (term === 'admin' && pw === 'admin123')) {
                     const staff = found || { Name: '系統管理員', LEVEL: 'admin' };
                     setCurrentUserData(staff);
                     setView(String(staff.LEVEL || staff.level || '').toLowerCase() === 'admin' ? 'admin-panel' : 'staff-tool');
-                } else { alert("驗證失敗：帳號或密碼不正確。"); }
+                } else { 
+                    alert("驗證失敗：帳號或密碼不正確。"); 
+                }
             };
+
             return (
                 <div className="p-10 flex flex-1 flex-col items-center justify-center bg-slate-50 text-center">
                     <BrandLogo className="mb-10 w-full" />
                     <h2 className="text-lg font-black mb-8 text-slate-700 border-b-4 border-orange-500 pb-1 uppercase">後台管理登入</h2>
-                    <input type="text" placeholder="帳號 Account" className="w-full p-4 mb-4 bg-white rounded-2xl border outline-none shadow-sm text-center" value={acc} onChange={e => setAcc(e.target.value)} />
-                    <input type="password" placeholder="密碼 Password" className="w-full p-4 mb-6 bg-white rounded-2xl border outline-none shadow-sm text-center" value={pw} onChange={e => setPw(e.target.value)} />
+                    <input type="text" placeholder="帳號 Account" className="w-full p-4 mb-4 bg-white rounded-2xl border outline-none shadow-sm text-center" value={acc} onChange={(e) => setAcc(e.target.value)} />
+                    <input type="password" placeholder="密碼 Password" className="w-full p-4 mb-6 bg-white rounded-2xl border outline-none shadow-sm text-center" value={pw} onChange={(e) => setPw(e.target.value)} />
                     <button onClick={login} className="w-full bg-slate-900 text-white p-4 rounded-2xl font-black shadow-lg active:scale-95">登入 Login</button>
                     <button onClick={() => setView('lookup')} className="mt-8 text-slate-400 text-xs font-bold underline">返回首頁</button>
                 </div>
             );
         }
 
-        // --- 專注於憑證與列印的與會者頁面 ---
         function UserDashboard({ data, claims, setView, BrandLogo }) {
             const isVIP = checkIsVIP(data);
-            const isC = (type) => claims.some(c => c.attendeeId === (data.id || data.ID) && c.item === type);
+            const isC = (type) => claims.some((c) => c.attendeeId === (data.id || data.ID) && c.item === type);
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(data.id || data.ID || '')}`;
 
             return (
@@ -264,7 +314,7 @@
                     </div>
                     
                     <div className="no-print h-full flex flex-col">
-                        <div className={`${isVIP ? 'bg-gradient-to-br from-amber-500 to-orange-600' : 'bg-blue-800'} p-6 text-white pb-8 shadow-xl shrink-0`}>
+                        <div className={`${isVIP ? 'bg-gradient-to-br from-amber-500 to-orange-600' : 'bg-blue-800'} p-6 text-white pb-12 shadow-xl shrink-0`}>
                             <div className="flex justify-between items-center mb-6">
                                 <BrandLogo invert className="w-28" />
                                 <button onClick={() => setView('lookup')} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-all"><Icon name="logout" size={18}/></button>
@@ -281,7 +331,7 @@
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6 pt-8 z-10">
+                        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6 pt-8 z-10 -mt-6 bg-slate-50 rounded-t-[32px]">
                             <div className="bg-white p-6 rounded-[32px] flex flex-col items-center shadow-xl border border-slate-100 text-center">
                                 <div className="p-3 bg-slate-50 rounded-3xl mb-6 border border-slate-100">
                                     <img src={qrUrl} className="w-48 h-48" alt="QR" />
@@ -322,12 +372,12 @@
             const scannerRef = useRef(null);
 
             const stats = useMemo(() => {
-                const checkedInIds = new Set(claims.filter(c => c.item === 'checkin').map(c => c.attendeeId));
+                const checkedInIds = new Set(claims.filter((c) => c.item === 'checkin').map((c) => c.attendeeId));
                 let vIn = 0, nIn = 0, vTotal = 0, nTotal = 0;
-                let mealClaimed = claims.filter(c => c.item === 'meal').length;
-                let giftClaimed = claims.filter(c => c.item === 'gift').length;
+                let mealClaimed = claims.filter((c) => c.item === 'meal').length;
+                let giftClaimed = claims.filter((c) => c.item === 'gift').length;
 
-                attendees.forEach(a => {
+                attendees.forEach((a) => {
                     const isVIP = checkIsVIP(a);
                     if (isVIP) { vTotal++; if (checkedInIds.has(a.id || a.ID)) vIn++; }
                     else { nTotal++; if (checkedInIds.has(a.id || a.ID)) nIn++; }
@@ -338,13 +388,20 @@
 
             useEffect(() => {
                 if (!scanRes && window.Html5QrcodeScanner) {
-                    const scanner = new Html5QrcodeScanner("reader", { fps: 15, qrbox: 250 });
+                    const scanner = new window.Html5QrcodeScanner("reader", { fps: 15, qrbox: 250 });
                     scanner.render((txt) => {
-                        const m = attendees.find(a => String(a.id || a.ID) === txt || String(a.Email || a.email || '').toLowerCase() === txt.toLowerCase());
-                        if (m) { setScanRes(m); scanner.clear().catch(() => {}); }
+                        const m = attendees.find((a) => String(a.id || a.ID) === txt || String(a.Email || a.email || '').toLowerCase() === txt.toLowerCase());
+                        if (m) { 
+                            setScanRes(m); 
+                            try { scanner.clear(); } catch(e) {}
+                        }
                     }, () => {});
                     scannerRef.current = scanner;
-                    return () => { if (scannerRef.current) scannerRef.current.clear().catch(() => {}); };
+                    return () => { 
+                        if (scannerRef.current) {
+                            try { scannerRef.current.clear(); } catch(e) {}
+                        }
+                    };
                 }
             }, [scanRes, attendees]);
 
@@ -353,7 +410,8 @@
                 await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('claims').doc(`${type}_${id}`).set({
                     attendeeId: id, item: type, timestamp: new Date().toISOString(), staff: user.Name || user['姓名'] || 'Staff'
                 });
-                if (type !== 'checkin' && !claims.some(c => c.attendeeId === id && c.item === 'checkin')) {
+                
+                if (type !== 'checkin' && !claims.some((c) => c.attendeeId === id && c.item === 'checkin')) {
                     await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('claims').doc(`checkin_${id}`).set({
                         attendeeId: id, item: 'checkin', timestamp: new Date().toISOString(), staff: user.Name || user['姓名'] || 'Staff'
                     });
@@ -423,19 +481,24 @@
         function AdminPanel({ attendees, workers, claims, setView, setMessage, db, appId, parseCSV, ATTENDEE_CSV_URL, GOOGLE_SHEET_URL }) {
             const [syncing, setSyncing] = useState(false);
             const [syncUrl, setSyncUrl] = useState('');
-            const checkedInCount = useMemo(() => (new Set(claims.map(c => c.attendeeId))).size, [claims]);
+            const checkedInCount = useMemo(() => (new Set(claims.map((c) => c.attendeeId))).size, [claims]);
 
             const syncData = async (target, url) => {
                 if (!url) return setMessage({ text: '請輸入正確的分頁網址', type: 'error' });
                 setSyncing(true);
                 try {
                     const csvUrl = url.includes('/edit') ? url.replace('/edit', '/export?format=csv') : url;
-                    const res = await fetch(csvUrl); const text = await res.text(); const rows = parseCSV(text);
-                    const head = rows[0]; const dataRows = rows.slice(1);
+                    const res = await fetch(csvUrl); 
+                    const text = await res.text(); 
+                    const rows = parseCSV(text);
+                    const head = rows[0]; 
+                    const dataRows = rows.slice(1);
                     const batch = db.batch();
-                    dataRows.forEach(r => {
+                    
+                    dataRows.forEach((r) => {
                         if (r.length < 2) return;
-                        const obj = {}; head.forEach((h, i) => {
+                        const obj = {}; 
+                        head.forEach((h, i) => {
                             let key = h.trim();
                             if (key === '姓名') key = 'Name';
                             if (key === '公司') key = 'Company';
@@ -449,8 +512,11 @@
                     });
                     await batch.commit();
                     setMessage({ text: `✅ ${target} 同步成功！\n成功寫入 ${dataRows.length} 筆資料。`, type: 'success' });
-                } catch (e) { setMessage({ text: '❌ 同步失敗。', type: 'error' }); }
-                finally { setSyncing(false); }
+                } catch (e) { 
+                    setMessage({ text: '❌ 同步失敗。', type: 'error' }); 
+                } finally { 
+                    setSyncing(false); 
+                }
             };
 
             return (
@@ -477,7 +543,7 @@
                         </button>
                         <div className="bg-white p-5 rounded-3xl border border-slate-100 space-y-3 text-left">
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">分頁資料同步 (Worker)</p>
-                            <input type="text" placeholder="貼上分頁完整網址" className="w-full p-3 bg-slate-50 border rounded-xl text-xs outline-none focus:ring-1 focus:ring-slate-300" value={syncUrl} onChange={e => setSyncUrl(e.target.value)} />
+                            <input type="text" placeholder="貼上分頁完整網址" className="w-full p-3 bg-slate-50 border rounded-xl text-xs outline-none focus:ring-1 focus:ring-slate-300" value={syncUrl} onChange={(e) => setSyncUrl(e.target.value)} />
                             <button onClick={() => syncData('workers', syncUrl)} disabled={syncing} className="w-full py-3 bg-slate-800 text-white rounded-xl text-xs font-bold active:scale-95">同步工作人員名單</button>
                         </div>
                         <button onClick={() => window.open(GOOGLE_SHEET_URL, '_blank')} className="w-full p-5 bg-[#f37021] text-white rounded-[32px] font-black flex items-center justify-center gap-3 shadow-xl active:scale-95"><Icon name="bar_chart" size={20} /> 開啟雲端試算表</button>
@@ -486,7 +552,7 @@
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
+        const root = window.ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
