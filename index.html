@@ -112,22 +112,11 @@
                 normalAttendance: "一般與會者",
                 mealGiven: "餐點發放",
                 giftGiven: "紀念品發放",
-                dbManagement: "雲端資料庫管理",
                 openSheet: "開啟試算表原始檔",
                 staffTeam: "現場工作小組",
                 authFail: "驗證失敗：帳號或密碼不正確。",
                 notFound: "抱歉，系統找不到您的資料。請確認輸入是否正確。",
                 loading: "載入資料中...",
-                sendCert: "寄發出席證明與感謝信",
-                eventNameLabel: "會議/活動名稱 (將顯示於信件標題)",
-                docIdLabel: "Google 文件範本 ID (非網址)",
-                docIdPlaceholder: "例如: 1A2b3C4d5E6f7G8h9I0j...",
-                emailContentLabel: "信件內文 (支援 {{姓名}} 與 {{公司}} 變數)",
-                sendBtn: "開始寄發給 {count} 位出席者",
-                sending: "正在由 Google 伺服器處理...",
-                syncWorkerLabel: "同步工作人員 (Worker) 分頁",
-                pasteWorkerUrl: "貼上 Worker 分頁網址",
-                syncBtn: "同步人員名單",
                 forceUpdate: "強制更新資料 (從試算表抓取最新)",
                 updating: "更新中...",
             },
@@ -169,22 +158,11 @@
                 normalAttendance: "General Attendance",
                 mealGiven: "Meals Distributed",
                 giftGiven: "Gifts Distributed",
-                dbManagement: "Database Management",
                 openSheet: "Open Google Sheet",
                 staffTeam: "On-site Staff Team",
                 authFail: "Authentication failed: Incorrect Account or Password.",
                 notFound: "Sorry, your record was not found. Please check your input.",
                 loading: "Loading Data...",
-                sendCert: "Send Certificates & Thank You Email",
-                eventNameLabel: "Event Name (For Email Subject)",
-                docIdLabel: "Google Doc Template ID",
-                docIdPlaceholder: "e.g. 1A2b3C4d5E6f7G8h9I0j...",
-                emailContentLabel: "Email Content (Supports {{姓名}} and {{公司}} variables)",
-                sendBtn: "Send to {count} Attendees",
-                sending: "Processing via Google Servers...",
-                syncWorkerLabel: "Sync Staff (Worker) Sheet",
-                pasteWorkerUrl: "Paste Worker Sheet URL",
-                syncBtn: "Sync Staff",
                 forceUpdate: "Force Update Data (Fetch from Sheet)",
                 updating: "Updating...",
             }
@@ -214,21 +192,6 @@
             return level === 'VIP';
         };
 
-        const parseCSV = (text) => {
-            const rows = []; let currentRow = []; let currentCell = ''; let insideQuote = false;
-            for (let i = 0; i < text.length; i++) {
-                const char = text[i]; const nextChar = text[i + 1];
-                if (char === '"') { if (insideQuote && nextChar === '"') { currentCell += '"'; i++; } else { insideQuote = !insideQuote; } }
-                else if (char === ',' && !insideQuote) { currentRow.push(currentCell.trim()); currentCell = ''; }
-                else if ((char === '\n' || char === '\r') && !insideQuote) {
-                    if (currentCell || currentRow.length > 0) { currentRow.push(currentCell.trim()); rows.push(currentRow); }
-                    currentRow = []; currentCell = ''; if (char === '\r' && nextChar === '\n') i++;
-                } else { currentCell += char; }
-            }
-            if (currentCell || currentRow.length > 0) { currentRow.push(currentCell.trim()); rows.push(currentRow); }
-            return rows;
-        };
-
         // --- 主程式 App ---
         function App() {
             const [lang, setLang] = useState('zh');
@@ -242,7 +205,7 @@
 
             const loadData = () => {
                 setIsSyncing(true);
-                // 加入快取剋星 (Cache Buster)，確保永遠抓取最新的資料，解決新增後查不到的問題
+                // 加入快取剋星 (Cache Buster)，確保永遠抓取最新的資料
                 const noCacheUrl = `${API_URL}?t=${new Date().getTime()}`;
                 fetch(noCacheUrl)
                     .then(res => res.json())
@@ -314,7 +277,6 @@
             const [val, setVal] = useState('');
             return (
                 <div className="p-10 flex flex-1 flex-col items-center justify-center text-center relative no-print">
-                    {/* 右上角工具列：包含更新按鈕與語言切換 */}
                     <div className="absolute top-6 right-6 flex items-center gap-2">
                         <button 
                             onClick={loadData}
@@ -374,7 +336,7 @@
             );
         }
 
-        // --- 子組件：與會者儀表板 (專注於列印與狀態) ---
+        // --- 子組件：與會者儀表板 ---
         function UserDashboard({ data, setView, BrandLogo, loadData, isSyncing, lang, setLang, t }) {
             const isVIP = checkIsVIP(data);
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(data.ID || data.id || '')}`;
@@ -472,6 +434,13 @@
             const [manualId, setManualId] = useState('');
             const scannerRef = useRef(null);
 
+            // 為了避免掃描器因為 scanMode 或 dbData 改變而重新整理導致閃退消失，我們使用 useRef 來保存最新狀態
+            const scanModeRef = useRef(scanMode);
+            const dbDataRef = useRef(dbData);
+            
+            useEffect(() => { scanModeRef.current = scanMode; }, [scanMode]);
+            useEffect(() => { dbDataRef.current = dbData; }, [dbData]);
+
             // 計算目前狀況
             const stats = useMemo(() => {
                 let vIn = 0, nIn = 0, vTotal = 0, nTotal = 0, mealClaimed = 0, giftClaimed = 0;
@@ -486,10 +455,11 @@
             }, [dbData.LIST]);
 
             const processCheckIn = (idText) => {
-                const found = dbData.LIST?.find(a => String(a.ID) === idText || String(a.id) === idText);
+                const currentMode = scanModeRef.current; // 取得最新的掃描模式
+                const found = dbDataRef.current.LIST?.find(a => String(a.ID) === idText || String(a.id) === idText);
                 if (found) {
                     setScanRes({ ...found, status: 'found' });
-                    fetch(API_URL, { method: 'POST', body: JSON.stringify({ id: idText, action: scanMode }) })
+                    fetch(API_URL, { method: 'POST', body: JSON.stringify({ id: idText, action: currentMode }) })
                     .then(res => res.json())
                     .then(result => {
                         if(result.status === "success") { setScanRes({ ...found, status: 'success', msg: result.message }); loadData(); } 
@@ -501,15 +471,27 @@
 
             useEffect(() => {
                 let html5QrCode;
+                // 只有在 scanRes 是 null 時，才初始化相機
                 if (!scanRes && document.getElementById("reader")) {
                     html5QrCode = new window.Html5Qrcode("reader");
                     html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } },
-                        (decodedText) => { if (html5QrCode.isScanning) { html5QrCode.stop().then(() => { processCheckIn(decodedText); }).catch(e => {}); } }, () => {}
-                    ).catch(e => {});
+                        (decodedText) => { 
+                            if (html5QrCode.isScanning) { 
+                                html5QrCode.pause(); // 掃到後先暫停相機，避免重複觸發
+                                processCheckIn(decodedText); 
+                            } 
+                        }, () => {}
+                    ).catch(e => console.error("Camera Init Error:", e));
                     scannerRef.current = html5QrCode;
                 }
-                return () => { if (scannerRef.current && scannerRef.current.isScanning) { scannerRef.current.stop().catch(e => {}); } };
-            }, [scanRes, scanMode]);
+                
+                // 元件卸載或 scanRes 改變時，如果相機還開著，就關閉它
+                return () => { 
+                    if (scannerRef.current && scannerRef.current.isScanning) { 
+                        scannerRef.current.stop().catch(e => {}); 
+                    } 
+                };
+            }, [scanRes]); // 依賴陣列中只有 scanRes，這樣切換 scanMode 就絕對不會讓掃描器閃退
 
             return (
                 <div className="flex flex-col h-full bg-slate-900 text-white p-4 no-print text-center">
@@ -568,43 +550,9 @@
 
         // --- 管理者中心 ---
         function AdminPanel({ dbData, setView, loadData, isSyncing, t }) {
-            const [sending, setSending] = useState(false);
-            const [eventName, setEventName] = useState(t.eventNameLabel.split(' ')[0] || "年度高峰論壇");
-            const [templateId, setTemplateId] = useState("");
-            const [emailContent, setEmailContent] = useState("親愛的 {{姓名}} 貴賓 您好：\n\n感謝您今日撥冗參與本活動。\n\n隨信附上您的專屬出席證明 PDF 檔，感謝您的支持與指教，期待未來再次相見。\n\n新動力公關 敬上");
-
             const checkedInCount = useMemo(() => {
                 return dbData.LIST?.filter(a => a['報到時間']).length || 0;
             }, [dbData.LIST]);
-
-            const handleSendCertificates = () => {
-                if (!eventName || !templateId || !emailContent) {
-                    return alert("請填寫完整的活動名稱、Google文件範本 ID 與信件內文。");
-                }
-                if (!confirm(`確定要將 PDF 出席證明寄給這 ${checkedInCount} 位已報到者嗎？\n(這需要由 Google Apps Script 在背景執行幾分鐘的時間)`)) return;
-
-                setSending(true);
-                fetch(API_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        action: 'send_certificates',
-                        eventName: eventName,
-                        templateId: templateId,
-                        emailContent: emailContent
-                    })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    alert(data.message || "寄送指令完成！");
-                    setSending(false);
-                    loadData(); 
-                })
-                .catch(err => {
-                    console.error(err);
-                    alert("寄送時發生錯誤，請檢查 Google Apps Script 設定。");
-                    setSending(false);
-                });
-            };
 
             return (
                 <div className="p-6 space-y-6 h-full overflow-y-auto no-print text-left bg-slate-50">
@@ -632,35 +580,6 @@
                         <Icon name={isSyncing ? "sync" : "cloud_sync"} size={20} className={isSyncing ? "animate-spin" : ""} />
                         {isSyncing ? t.updating : t.forceUpdate}
                     </button>
-
-                    <div className="bg-white p-6 rounded-[32px] border border-blue-100 shadow-lg">
-                        <div className="flex items-center gap-2 mb-4 text-blue-700">
-                            <Icon name="mail" />
-                            <h3 className="font-black">{t.sendCert}</h3>
-                        </div>
-                        
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t.eventNameLabel}</label>
-                                <input type="text" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-blue-500" value={eventName} onChange={e => setEventName(e.target.value)} />
-                            </div>
-
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t.docIdLabel}</label>
-                                <input type="text" placeholder={t.docIdPlaceholder} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 font-mono" value={templateId} onChange={e => setTemplateId(e.target.value)} />
-                            </div>
-
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t.emailContentLabel}</label>
-                                <textarea className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500 h-32 leading-relaxed" value={emailContent} onChange={e => setEmailContent(e.target.value)}></textarea>
-                            </div>
-
-                            <button onClick={handleSendCertificates} disabled={sending} className={`w-full p-4 rounded-xl font-black flex items-center justify-center gap-2 shadow-lg transition-all ${sending ? 'bg-slate-200 text-slate-500' : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95'}`}>
-                                <Icon name={sending ? "sync" : "send"} size={18} className={sending ? "animate-spin" : ""} />
-                                {sending ? t.sending : t.sendBtn.replace('{count}', checkedInCount)}
-                            </button>
-                        </div>
-                    </div>
                     
                     <button onClick={() => window.open(GOOGLE_SHEET_URL, '_blank')} className="w-full p-4 bg-[#f37021] text-white rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md">
                         <Icon name="open_in_new" size={16}/> {t.openSheet}
